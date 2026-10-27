@@ -7,44 +7,28 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from .codes import norm_tmpl, query_codes
+from .lang import QUERY_META, SCOPE_RE, STOPWORDS, check_lang
 
 RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 TOKEN_RE = re.compile(r"(?:sr|se|s|e)\.\d{2}\.\d{2}(?:\.\d{2})?|[rcz]\d{4}|\w+")
 
-# Parole vuote: con rank_bm25 anche le parole frequentissime ("per", "le", "i")
-# ricevono un peso minimo non trascurabile e, sommate, coprono le parole utili.
-# "non" e "senza" restano: qui cambiano il significato.
-STOPWORDS = set("""
-il lo la i gli le l un uno una di a da in con su per tra fra
-del dello della dei degli delle dell al allo alla ai agli alle all
-dal dallo dalla dai dagli dalle dall nel nello nella nei negli nelle nell
-sul sullo sulla sui sugli sulle sull d e ed o od che se ma anche
-come dove quando quale quali qual cosa chi cui si ci ne è sono essere
-viene vengono va vanno deve devono può possono questo questa questi queste
-""".split())
-
-# Parole "di servizio" tipiche delle domande, tolte solo dalla query
-QUERY_META = {"istruzioni", "istruzione", "riportato", "riportata", "riportare",
-              "riporta", "segnala", "segnalare", "segnalato", "compilare", "cella"}
-
-RE_GROUP = re.compile(r"\bgrupp[oi]\b", re.I)
-RE_SOLO = re.compile(r"\bsingol[ae]\s+impres[ae]\b", re.I)
-
-
-def tokenize(text):
+def tokenize(text, lang="it"):
     """Token per BM25: tiene interi i codici (s.02.01, r0010) e toglie le stopword."""
-    return [t for t in TOKEN_RE.findall(text.lower()) if t not in STOPWORDS]
+    stop = STOPWORDS[lang]
+    return [t for t in TOKEN_RE.findall(text.lower()) if t not in stop]
 
 
-def tokenize_query(q):
-    return [t for t in tokenize(q) if t not in QUERY_META]
+def tokenize_query(q, lang="it"):
+    meta = QUERY_META[lang]
+    return [t for t in tokenize(q, lang) if t not in meta]
 
 
-def query_scope(q):
+def query_scope(q, lang="it"):
     """Allegato implicito nella domanda: III se parla di gruppi, II se di
     singole imprese, None se nessuno dei due o entrambi."""
-    g, s = bool(RE_GROUP.search(q)), bool(RE_SOLO.search(q))
+    re_group, re_solo = SCOPE_RE[lang]
+    g, s = bool(re_group.search(q)), bool(re_solo.search(q))
     if g and not s:
         return "III"
     if s and not g:
@@ -62,15 +46,17 @@ class Retriever:
     """Indice di ricerca su chunk ed embeddings gia' calcolati.
 
     emb_model serve a codificare le domande (stesso modello degli embeddings);
+    con embeddings=None ed emb_model=None la ricerca usa solo BM25.
     reranker e' facoltativo: senza, la ricerca usa solo la fusione.
     """
 
-    def __init__(self, chunks, embeddings, emb_model, reranker=None):
+    def __init__(self, chunks, embeddings=None, emb_model=None, reranker=None, lang="it"):
+        self.lang = check_lang(lang)
         self.chunks = chunks
         self.E = embeddings
         self.emb_model = emb_model
         self.reranker = reranker
-        self.bm25 = BM25Okapi([tokenize(c["text"]) for c in chunks])
+        self.bm25 = BM25Okapi([tokenize(c["text"], lang) for c in chunks])
         self.chunk_tmpl = [norm_tmpl(c["template"]) for c in chunks]
         self.chunk_cells = [set(c["cells"]) for c in chunks]
         self.annexes = list(dict.fromkeys(c["annex"] for c in chunks if c["annex"]))
@@ -78,9 +64,12 @@ class Retriever:
     def first_stage(self, query):
         """Punteggi BM25 ed embeddings su tutti i chunk. Per gli embeddings usa sia la
         domanda originale sia la versione "pulita" (solo parole di contenuto) e tiene
-        il massimo: le formule di cortesia della domanda non devono dominare."""
-        q_tokens = tokenize_query(query)
+        il massimo: le formule di cortesia della domanda non devono dominare.
+        Senza modello di embedding restituisce dense=None (solo BM25)."""
+        q_tokens = tokenize_query(query, self.lang)
         bm = self.bm25.get_scores(q_tokens) if q_tokens else np.zeros(len(self.chunks))
+        if self.emb_model is None or self.E is None:
+            return bm, None
         clean_q = " ".join(q_tokens)
         texts = [query] + ([clean_q] if clean_q and clean_q != query.lower() else [])
         qvs = self.emb_model.encode(texts, normalize_embeddings=True,
@@ -96,14 +85,15 @@ class Retriever:
         bm, dense = self.first_stage(query)
         keep = np.array([annex is None or c["annex"] == annex for c in chunks])
         bm = np.where(keep, bm, -np.inf)
-        dense = np.where(keep, dense, -np.inf)
 
-        # Reciprocal Rank Fusion delle due classifiche
+        # Reciprocal Rank Fusion delle classifiche disponibili
         rrf = defaultdict(float)
         for r, i in enumerate(np.argsort(-bm)[:n_cand]):
             rrf[int(i)] += 1 / (60 + r)
-        for r, i in enumerate(np.argsort(-dense)[:n_cand]):
-            rrf[int(i)] += 1 / (60 + r)
+        if dense is not None:
+            dense = np.where(keep, dense, -np.inf)
+            for r, i in enumerate(np.argsort(-dense)[:n_cand]):
+                rrf[int(i)] += 1 / (60 + r)
 
         # Se la domanda contiene template o codici cella, promuove i chunk esatti
         if tmpls or cells:
@@ -141,7 +131,7 @@ class Retriever:
         # Se la domanda parla di gruppi (o di singole imprese) e non c'e' un filtro
         # esplicito, l'allegato "opposto" scende in classifica (articoli e
         # Allegato I non vengono toccati)
-        scope = query_scope(query) if annex is None else None
+        scope = query_scope(query, self.lang) if annex is None else None
         other = {"II": "III", "III": "II"}.get(scope)
 
         def scope_ok(i):

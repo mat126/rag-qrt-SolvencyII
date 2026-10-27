@@ -10,6 +10,7 @@ from collections import Counter
 from statistics import median
 
 from .codes import RE_CELL, RE_TEMPLATE, template_base, template_full
+from .lang import ANNEX_TITLE_RE, LABELS, check_lang
 
 RE_ANNEX = re.compile(r"^(?:#+\s*)?\**\s*(ALLEGATO|ANNEX)\s+([IVXLC]+)\b", re.I)
 RE_ARTICLE = re.compile(r"^(?:#+\s*)?\**\s*(Articolo|Article)\s+(\d+)\b", re.I)
@@ -30,8 +31,10 @@ def clean_row(line):
 
 
 class Chunker:
-    def __init__(self, max_chars=1500):
+    def __init__(self, max_chars=1500, lang="it"):
         self.max_chars = max_chars
+        self.labels = LABELS[check_lang(lang)]
+        self.annex_title_re = ANNEX_TITLE_RE[lang]
         self.chunks = []
         self.annex = self.article = self.section = None
         self.annex_title, self.await_title = None, False
@@ -43,16 +46,16 @@ class Chunker:
     def prefix(self, page):
         # Prefisso breve: un prefisso lungo e uguale per centinaia di chunk
         # "diluisce" gli embeddings delle istruzioni corte
+        L = self.labels
         parts = []
         if self.annex:
-            label = f"Allegato {self.annex}"
+            label = f"{L['annex']} {self.annex}"
             if self.annex_title:
-                short = re.sub(r"^.*segnalazione\s+(?:delle|dei|degli)\s+", "",
-                               self.annex_title)
+                short = self.annex_title_re.sub("", self.annex_title)
                 label += f" ({short[:60]})"
             parts.append(label)
         elif self.article:
-            parts.append(f"Articolo {self.article}")
+            parts.append(f"{L['article']} {self.article}")
         if self.template_title:
             parts.append(self.template_title[:120])
         if (self.section and self.section != self.template_title
@@ -60,7 +63,7 @@ class Chunker:
             parts.append(self.section[:120])
         if self.template_full and not any(self.template_full in p for p in parts):
             parts.append(self.template_full)
-        parts.append(f"pag. {page}")
+        parts.append(f"{L['page']} {page}")
         return "[" + " · ".join(parts) + "]"
 
     def add(self, body, page, kind):
@@ -193,9 +196,10 @@ class Chunker:
         return self.chunks
 
 
-def build_chunks(pages, max_chars=1500):
-    """Chunk di tutte le pagine ({numero_pagina: markdown}), in ordine di pagina."""
-    chunker = Chunker(max_chars=max_chars)
+def build_chunks(pages, max_chars=1500, lang="it"):
+    """Chunk di tutte le pagine ({numero_pagina: markdown}), in ordine di pagina.
+    lang: lingua del documento, "it" o "en" (etichette del prefisso)."""
+    chunker = Chunker(max_chars=max_chars, lang=lang)
     for pg in sorted(pages):
         chunker.process_page(pages[pg], pg)
     return chunker.finish()
@@ -217,3 +221,9 @@ def print_chunk_stats(chunks, n_pages=None, examples=5):
     # Nell'Allegato II dovrebbero essere quasi tutte "istruzione"
     log = [c for c in chunks if c["annex"] == "II"]
     print("\nAllegato II:", Counter(c["kind"] for c in log))
+    # Controllo del titolo abbreviato degli allegati nel prefisso
+    print("Prefissi degli allegati:")
+    for annex in dict.fromkeys(c["annex"] for c in chunks if c["annex"]):
+        sample = [c for c in chunks if c["annex"] == annex]
+        first = next((c for c in sample if c["kind"] == "istruzione"), sample[0])
+        print("  ", first["text"].split("\n", 1)[0][:140])

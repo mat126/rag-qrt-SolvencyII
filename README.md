@@ -4,13 +4,14 @@ Question answering over **Commission Implementing Regulation (EU) 2023/894**, wh
 
 Pipeline: PDF parsing with Docling → structural chunking (one chunk per LOG instruction) → hybrid index of BM25 and `BAAI/bge-m3` embeddings → Reciprocal Rank Fusion, code-aware boosting and `BAAI/bge-reranker-v2-m3` used as an extra vote → answer generation with `Qwen/Qwen2.5-7B-Instruct` → Gradio interface with feedback collection.
 
-The regulation, and therefore the interface and the code comments, are in Italian.
+The pipeline supports both the English and the Italian version of the regulation (`lang="en"` or `lang="it"`): stopwords, implicit-annex detection, prompts, interface and evaluation questions follow the chosen language, while template and cell codes are language-independent. Code comments are in Italian.
 
 ## Repository layout
 
 ```
 qrt_rag/
   codes.py        recognition of template (S.02.01) and cell (R0010) codes
+  lang.py         language resources (en/it): stopwords, labels, prompts, UI
   parsing.py      PDF -> Markdown page by page, in checkpointed batches
   chunking.py     state machine tracking annex, article, template and LOG rows
   index.py        bge-m3 embeddings, index save/load
@@ -18,9 +19,10 @@ qrt_rag/
   generation.py   LocalLLM (Qwen) and system prompt
   ui.py           Gradio interface with answer rating
   evaluation.py   evaluation set, hit@k and MRR, per-stage diagnostics
-  eval_set.json   development set: 31 questions with expected source + 2 negatives
+  eval_set*.json  development set (it, en): 31 questions with expected source + 2 negatives
 notebooks/
-  qrt_rag_kaggle.ipynb   end-to-end run on Kaggle (2 x T4 GPU)
+  qrt_rag_kaggle.ipynb     end-to-end run on Kaggle (2 x T4 GPU)
+  fase2_browser_eval.ipynb  can retrieval run in the browser? small embedding models vs bge-m3
 ```
 
 ## Installation
@@ -45,13 +47,13 @@ from qrt_rag.index import load_index, load_embedder
 from qrt_rag.retrieval import Retriever, load_reranker, show
 
 chunks, E = load_index("index/")
-retriever = Retriever(chunks, E, load_embedder(), reranker=load_reranker())
-show(retriever.search("Istruzioni per S.23.01 R0540", k=5))
+retriever = Retriever(chunks, E, load_embedder(), reranker=load_reranker(), lang="en")
+show(retriever.search("Instructions for S.23.01 R0540", k=5))
 ```
 
 ## Results
 
-On the development set (31 questions, no annex filter) the correct source is in the top 5 results for every question:
+On the development set (Italian version, 31 questions, no annex filter) the correct source is in the top 5 results for every question:
 
 | Configuration | hit@1 | hit@5 | hit@10 | MRR |
 | --- | --- | --- | --- | --- |

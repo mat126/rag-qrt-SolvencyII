@@ -25,4 +25,4 @@ all = ["docling", "pypdf", "transformers", "accelerate", "gradio", "pandas"]
 packages = ["qrt_rag"]
 
 [tool.setuptools.package-data]
-qrt_rag = ["eval_set.json"]
+qrt_rag = ["eval_set.json", "eval_set_en.json"]

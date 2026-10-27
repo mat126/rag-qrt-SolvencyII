@@ -5,6 +5,7 @@ carica bge-m3 e, se attivo, il reranker, e avvia l'interfaccia in sola ricerca.
 
 Variabili e secret dello Space:
   INDEX_REPO     Dataset con l'indice, es. "mat126/qrt-rag-index"
+  QRT_LANG       lingua di documento e domande: "en" (default) oppure "it"
   USE_RERANKER   "1" (default) oppure "0" se su CPU risulta troppo lento
   HF_TOKEN       solo se il Dataset e' privato
   GRADIO_USER / GRADIO_PASS   facoltativi: se presenti, l'app chiede il login
@@ -15,11 +16,13 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 from qrt_rag.index import load_embedder, load_index
+from qrt_rag.lang import UI
 from qrt_rag.retrieval import Retriever, load_reranker
 from qrt_rag.ui import build_demo
 
 INDEX_REPO = os.environ.get("INDEX_REPO", "mat126/qrt-rag-index")
 USE_RERANKER = os.environ.get("USE_RERANKER", "1") == "1"
+QRT_LANG = os.environ.get("QRT_LANG", "en")
 DATA_DIR = Path("data")
 
 
@@ -33,7 +36,7 @@ def download_index():
 chunks, E = load_index(download_index())
 emb_model = load_embedder(device="cpu")
 reranker = load_reranker(device="cpu") if USE_RERANKER else None
-retriever = Retriever(chunks, E, emb_model, reranker=reranker)
+retriever = Retriever(chunks, E, emb_model, reranker=reranker, lang=QRT_LANG)
 print(f"Indice caricato: {len(chunks)} chunk | reranker: {'si' if reranker else 'no'}")
 
 # Nota: sul piano gratuito il disco si azzera a ogni riavvio, quindi questo
@@ -42,4 +45,4 @@ demo = build_demo(retriever, llm=None, feedback_path=DATA_DIR / "feedback.jsonl"
 
 user, pwd = os.environ.get("GRADIO_USER"), os.environ.get("GRADIO_PASS")
 auth = (user, pwd) if user and pwd else None
-demo.launch(auth=auth, auth_message="RAG QRT - accesso riservato" if auth else None)
+demo.launch(auth=auth, auth_message=UI[QRT_LANG]["auth"] if auth else None)

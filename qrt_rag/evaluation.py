@@ -24,10 +24,12 @@ except ImportError:                    # fuori dai notebook: stampa semplice
     _display = print
 
 
-def load_eval_set(path=None):
-    """Set di sviluppo (31 casi + 2 negativi). Di default quello incluso nel pacchetto."""
+def load_eval_set(path=None, lang="it"):
+    """Set di sviluppo (31 casi + 2 negativi). Di default quello incluso nel pacchetto,
+    nella lingua indicata: le fonti attese sono le stesse, cambiano le domande."""
     if path is None:
-        text = resources.files("qrt_rag").joinpath("eval_set.json").read_text(encoding="utf-8")
+        name = "eval_set.json" if lang == "it" else f"eval_set_{lang}.json"
+        text = resources.files("qrt_rag").joinpath(name).read_text(encoding="utf-8")
     else:
         text = Path(path).read_text(encoding="utf-8")
     return json.loads(text)
@@ -35,7 +37,7 @@ def load_eval_set(path=None):
 
 def load_feedback_cases(patterns=DEFAULT_FEEDBACK_GLOBS):
     """Casi dal feedback Gradio: ogni riga con "fonte attesa" diventa un caso.
-    Formati accettati: "S.23.01 R0540" (template e/o celle) oppure "Articolo 7"."""
+    Formati accettati: "S.23.01 R0540" (template e/o celle), "Articolo 7" o "Article 7"."""
     files = sorted({f for p in patterns for f in glob.glob(p, recursive=True)})
     cases = []
     for fp in files:
@@ -46,7 +48,7 @@ def load_feedback_cases(patterns=DEFAULT_FEEDBACK_GLOBS):
                 if not exp:
                     continue
                 case = {"id": f"fb-{Path(fp).stem}-{n:03d}", "tipo": "feedback", "q": r["question"]}
-                art = re.search(r"ART(?:ICOLO)?\.?\s*(\d+)", exp)
+                art = re.search(r"ART(?:ICOLO|ICLE)?\.?\s*(\d+)", exp)
                 m = RE_TEMPLATE.search(exp)
                 if art:
                     case["article"] = art.group(1)
@@ -139,7 +141,8 @@ def eval_llm(cases, answer_fn, cache=None, out_dir=None):
         if ans is None or c.get("negative"):
             ok = None   # negative: da controllare a mano, deve dire che non c'e' risposta
         elif c.get("article"):
-            ok = f"ARTICOLO {c['article']}" in ans.upper()
+            up = ans.upper()
+            ok = any(f"{w} {c['article']}" in up for w in ("ARTICOLO", "ARTICLE"))
         else:
             ok = all(cell in ans.upper() for cell in c["cells"]) if c.get("cells") else None
         rows.append({"id": c["id"], "tipo": c["tipo"], "cita_fonte_attesa": ok, "risposta": ans})
@@ -164,8 +167,8 @@ def diagnose(retriever, cases, case_id, show=10):
         print("Nessun chunk corrisponde alla fonte attesa: controlla il caso.")
         return
     bm, dense = retriever.first_stage(c["q"])
-    print("Parole usate da BM25:", tokenize_query(c["q"]),
-          "| allegato implicito:", query_scope(c["q"]))
+    print("Parole usate da BM25:", tokenize_query(c["q"], retriever.lang),
+          "| allegato implicito:", query_scope(c["q"], retriever.lang))
 
     def best(scores):
         pos = np.empty(len(scores), dtype=int)
@@ -175,7 +178,8 @@ def diagnose(retriever, cases, case_id, show=10):
     def pos_in(hits):
         return next((h["rank"] for h in hits if h["id"] in target), None)
 
-    print(f"Solo BM25: {best(bm)} | Solo embeddings: {best(dense)} | "
+    dense_pos = best(dense) if dense is not None else "-"
+    print(f"Solo BM25: {best(bm)} | Solo embeddings: {dense_pos} | "
           f"Fusione: {pos_in(retriever.search(c['q'], k=40, rerank=False))} | "
           f"Finale: {pos_in(retriever.search(c['q'], k=40))}")
     print("\nPrimi risultati finali (<< = fonte attesa):")

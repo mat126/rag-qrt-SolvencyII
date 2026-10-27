@@ -6,24 +6,14 @@ GPU disponibili). Richiede gli extra [llm].
 import gc
 import time
 
-DEFAULT_LLM = "Qwen/Qwen2.5-7B-Instruct"   # licenza Apache 2.0, buon italiano
+from .lang import LABELS, SYSTEM_PROMPTS, UI, check_lang
 
-SYSTEM_PROMPT = """Sei un assistente esperto di reporting di vigilanza Solvency II.
-Rispondi SOLO sulla base degli estratti del regolamento forniti.
-- Cita ogni affermazione con il numero dell'estratto, es. [2].
-- Riporta codici di template e celle (S.xx.xx, R0000, C0000) esattamente come nel testo.
-- Lo stesso template puo' avere istruzioni diverse in allegati diversi (es. imprese
-  singole e gruppi): indica sempre l'allegato e, se la domanda non lo specifica,
-  distingui i casi invece di mescolarli.
-- Riporta gli elenchi chiusi esattamente come nel testo, con i loro codici
-  numerici originali: non rinumerarli e non aggiungere o togliere opzioni.
-- Se un'istruzione e' identica per singole imprese e gruppi, dillo una volta sola
-  invece di ripeterla.
-- Se gli estratti non contengono la risposta, dillo chiaramente invece di supporre.
-- Rispondi in italiano, in modo conciso."""
+DEFAULT_LLM = "Qwen/Qwen2.5-7B-Instruct"   # licenza Apache 2.0, buon italiano e inglese
+
+SYSTEM_PROMPT = SYSTEM_PROMPTS["it"]   # compatibilita'
 
 
-def build_context(hits, max_chars_chunk=2000, max_chars_total=9000):
+def build_context(hits, max_chars_chunk=2000, max_chars_total=9000, lang="it"):
     """Contesto per l'LLM con un tetto di lunghezza: alcuni chunk (articoli,
     tabelle dell'Allegato I) superano i 7000 caratteri e, su una T4, un prompt
     troppo lungo esaurisce la memoria nel calcolo dell'attenzione."""
@@ -32,7 +22,8 @@ def build_context(hits, max_chars_chunk=2000, max_chars_total=9000):
         text = h["text"]
         if len(text) > max_chars_chunk:
             text = text[:max_chars_chunk] + " [...]"
-        block = f"[{n}] (pag. {h['page']}, {h['template_full'] or h['section'] or ''})\n{text}"
+        block = (f"[{n}] ({LABELS[lang]['page']} {h['page']}, "
+                 f"{h['template_full'] or h['section'] or ''})\n{text}")
         if total + len(block) > max_chars_total and parts:
             break
         parts.append(block)
@@ -40,21 +31,24 @@ def build_context(hits, max_chars_chunk=2000, max_chars_total=9000):
     return "\n\n".join(parts)
 
 
-def user_message(question, hits, **context_kwargs):
-    return f"<estratti>\n{build_context(hits, **context_kwargs)}\n</estratti>\n\nDomanda: {question}"
+def user_message(question, hits, lang="it", **context_kwargs):
+    L = LABELS[lang]
+    tag = L["excerpts"]
+    return (f"<{tag}>\n{build_context(hits, lang=lang, **context_kwargs)}\n</{tag}>"
+            f"\n\n{L['question']}: {question}")
 
 
 class LocalLLM:
     """LLM locale. Il prompt si cambia senza ricaricare il modello:
     llm.system_prompt = NUOVO_PROMPT."""
 
-    name = "Qwen (locale)"
-
-    def __init__(self, model_id=DEFAULT_LLM, system_prompt=SYSTEM_PROMPT,
+    def __init__(self, model_id=DEFAULT_LLM, system_prompt=None, lang="it",
                  max_chars_chunk=2000, max_chars_total=9000):
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        self.system_prompt = system_prompt
+        self.lang = check_lang(lang)
+        self.name = UI[lang]["llm_name"]
+        self.system_prompt = system_prompt or SYSTEM_PROMPTS[lang]
         self.context_kwargs = {"max_chars_chunk": max_chars_chunk,
                                "max_chars_total": max_chars_total}
         self.tok = AutoTokenizer.from_pretrained(model_id)
@@ -67,7 +61,8 @@ class LocalLLM:
         import torch
         msgs = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": user_message(question, hits, **self.context_kwargs)},
+            {"role": "user",
+             "content": user_message(question, hits, lang=self.lang, **self.context_kwargs)},
         ]
         prompt = self.tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
         inputs = self.tok(prompt, return_tensors="pt").to(self.model.device)
