@@ -67,4 +67,10 @@ This is an optimistic estimate, since the same set was used to tune the pipeline
 
 ## Data
 
-The regulation PDF, the parsed pages and the index are not included in the repository. The regulation is published on EUR-Lex.
+The regulation PDFs, the parsed pages and the Python index are not included in the repository.
+`web/assets/` contains the files used by the in-browser search (excerpts of the regulation text,
+embeddings and configuration), generated with `notebooks/fase3_export_web.ipynb`.
+
+Source of the regulation text: Commission Implementing Regulation (EU) 2023/894, published on EUR-Lex
+(https://eur-lex.europa.eu), © European Union. Reuse is permitted provided the source is acknowledged,
+as set out in the EUR-Lex legal notice. Only the official texts published in the Official Journal are authentic.

@@ -46,16 +46,24 @@ def query_texts(query, lang):
 
 
 def export_web(out_dir, chunks, E, encoder, model_info, cases, lang="en",
-               n_cand=40, depth=20):
+               n_cand=40, depth=20, pdfs=None, ref_lang=None, ref_pages=None):
     """encoder: oggetto con encode() per le domande (es. PrefixedEncoder con "query: ").
     model_info: dict con "hf" (nome Hugging Face), "web" (nome per transformers.js),
-    "q_prefix", "p_prefix", "pooling" ("mean" per e5)."""
+    "q_prefix", "p_prefix", "pooling" ("mean" per e5).
+    pdfs: nomi dei PDF in web/assets per lingua, es. {"en": "regulation_en.pdf", "it": ...}.
+    ref_lang, ref_pages: lingua della seconda versione e, per ogni chunk, la pagina
+    corrispondente come prodotta da qrt_rag.alignment.align_pages()."""
     check_lang(lang)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
     # 1. Chunk
     light = [{k: c[k] for k in WEB_FIELDS} for c in chunks]
+    if ref_pages is not None:
+        if len(ref_pages) != len(chunks):
+            raise ValueError("ref_pages deve avere un elemento per chunk")
+        for d, a in zip(light, ref_pages):
+            d["page_ref"], d["page_ref_method"] = a["page"], a["method"]
     (out / "chunks.json").write_text(json.dumps(light, ensure_ascii=False), encoding="utf-8")
 
     # 2. Embeddings in float16: il browser lavora con questi, quindi anche i
@@ -107,6 +115,7 @@ def export_web(out_dir, chunks, E, encoder, model_info, cases, lang="en",
         "lang": lang,
         "n_chunks": len(chunks), "dim": int(E.shape[1]), "dtype": "float16",
         "model": model_info,
+        "pdfs": pdfs or {}, "ref_lang": ref_lang,
         "search": {"n_cand": n_cand, "rrf_k": 60, "code_boost": 0.05,
                    "bm25": {"k1": 1.5, "b": 0.75, "epsilon": 0.25}},
         "patterns": {

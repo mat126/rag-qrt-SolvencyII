@@ -3,18 +3,347 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RAG QRT</title>
+<title>RAG QRT – Solvency II reporting instructions</title>
 <style>
-  :root { color-scheme: light; --fg: #1d2730; --bg: #f7f6f2; --accent: #1f6f8b; }
-  @media (prefers-color-scheme: dark) { :root { color-scheme: dark; --fg: #e8ecef; --bg: #14191e; --accent: #6cc3e0; } }
-  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--fg);
-         margin: 0; padding: 2rem; line-height: 1.5; }
-  a { color: var(--accent); }
+  :root {
+    color-scheme: light;
+    --fg: #1d2730; --bg: #f7f6f2; --card: #ffffff; --muted: #5a6570; --line: #d9dfe3;
+    --accent: #1f6f8b; --accent-fg: #ffffff; --chip: #e7eef1; --code: #f1ece3; --code-fg: #6b3d0a;
+    --ok: #1f7a4d; --ko: #b3261e; --warn: #8a5a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --fg: #e8ecef; --bg: #13181d; --card: #1b2229; --muted: #a3b0ba; --line: #2f3a44;
+      --accent: #6cc3e0; --accent-fg: #0f1418; --chip: #24313b; --code: #3a2f22; --code-fg: #f3c98b;
+      --ok: #5fd39a; --ko: #ff8a80; --warn: #f0c060;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--fg); line-height: 1.5; }
+  header { padding: 1.25rem 1.5rem .75rem; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 1.35rem; }
+  header p { margin: .2rem 0 0; color: var(--muted); font-size: .95rem; }
+  .layout { display: grid; grid-template-columns: minmax(18rem, 26rem) 1fr; gap: 1.5rem;
+            padding: 1.25rem 1.5rem 2rem; align-items: start; }
+  @media (max-width: 52rem) { .layout { grid-template-columns: 1fr; } }
+  .panel { position: sticky; top: 1rem; display: flex; flex-direction: column; gap: .9rem; }
+  @media (max-width: 52rem) { .panel { position: static; } }
+  label { display: block; font-weight: 600; font-size: .9rem; }
+  textarea, input[type=text], select {
+    width: 100%; font: inherit; color: var(--fg); background: var(--card);
+    border: 1px solid var(--line); border-radius: .5rem; padding: .55rem .65rem; margin-top: .3rem; }
+  textarea { resize: vertical; }
+  .row { display: flex; gap: .75rem; align-items: end; }
+  .row > * { flex: 1; }
+  input[type=range] { width: 100%; margin-top: .6rem; accent-color: var(--accent); }
+  button { font: inherit; cursor: pointer; border-radius: .5rem; border: 1px solid var(--line);
+           background: var(--card); color: var(--fg); padding: .5rem .8rem; }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.link { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; }
+  .status { margin: 0; font-size: .88rem; padding: .5rem .65rem; border-radius: .5rem; background: var(--chip); }
+  .status[data-kind=ok] { color: var(--ok); }
+  .status[data-kind=error] { color: var(--ko); }
+  .status[data-kind=loading] { color: var(--warn); }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: .8rem; }
+  .box summary { cursor: pointer; font-weight: 600; }
+  .box label { margin-top: .6rem; }
+  .muted { color: var(--muted); font-size: .88rem; }
+  .msg { font-size: .88rem; margin: .4rem 0 0; min-height: 1.2em; }
+  #prompt-box { font-family: ui-monospace, Consolas, monospace; font-size: .8rem; height: 12rem; }
+  .results-head { color: var(--muted); font-size: .9rem; margin: 0 0 .6rem; }
+  .hit { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: .8rem 1rem; margin-bottom: .8rem; }
+  .hit-head { display: flex; flex-wrap: wrap; gap: .4rem .6rem; align-items: center; font-size: .9rem; }
+  .num { font-weight: 700; color: var(--accent); }
+  .chip { background: var(--chip); border-radius: 1rem; padding: .05rem .55rem; font-size: .8rem; }
+  .links { margin-left: auto; display: flex; gap: .6rem; font-size: .85rem; }
+  .links a { color: var(--accent); }
+  .prefix { color: var(--muted); font-size: .8rem; margin: .35rem 0; }
+  .body { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font-size: .95rem; }
+  .body.clamp { max-height: 9.5rem; overflow: hidden;
+                mask-image: linear-gradient(#000 70%, transparent); -webkit-mask-image: linear-gradient(#000 70%, transparent); }
+  code { background: var(--code); color: var(--code-fg); border-radius: .25rem; padding: 0 .25rem;
+         font-family: ui-monospace, Consolas, monospace; font-size: .88em; }
+  .empty { color: var(--muted); padding: 2rem 0; }
 </style>
 </head>
 <body>
-<h1>RAG QRT</h1>
-<p>In-browser search over Commission Implementing Regulation (EU) 2023/894. The search interface is under construction.</p>
-<p><a href="parity.html">Parity test: Python vs browser</a></p>
+<header>
+  <h1>Solvency II reporting instructions search</h1>
+  <p>Commission Implementing Regulation (EU) 2023/894 · quantitative reporting templates (QRT) · runs entirely in your browser</p>
+</header>
+
+<main class="layout">
+  <section class="panel">
+    <form id="form">
+      <label for="q">Question</label>
+      <textarea id="q" rows="3" placeholder="e.g. What must be reported in S.23.01 R0540?"></textarea>
+      <div class="row" style="margin-top:.6rem">
+        <div>
+          <label for="annex">Annex</label>
+          <select id="annex"><option value="">All (recommended)</option></select>
+        </div>
+        <div>
+          <label for="k">Excerpts: <output id="k-val">10</output></label>
+          <input type="range" id="k" min="3" max="15" value="10">
+        </div>
+      </div>
+      <button type="submit" id="go" class="primary" style="margin-top:.8rem;width:100%" disabled>Search</button>
+    </form>
+
+    <p id="model-status" class="status" role="status">Loading the index…</p>
+
+    <div id="tools" class="box" hidden>
+      <button id="copy" type="button" style="width:100%">Copy prompt for an AI assistant</button>
+      <p class="muted" style="margin:.4rem 0 0">Instructions, numbered excerpts and your question, ready to paste into Copilot, Claude or any other assistant.</p>
+      <p id="copy-msg" class="msg"></p>
+      <textarea id="prompt-box" hidden readonly></textarea>
+    </div>
+
+    <details id="rate" class="box" hidden>
+      <summary>Rate these results</summary>
+      <label for="expected">Expected source</label>
+      <input type="text" id="expected" placeholder="e.g. S.23.01 R0540 or Article 2">
+      <label for="note">Note</label>
+      <input type="text" id="note" placeholder="correct / partial / wrong, comments">
+      <div class="row" style="margin-top:.7rem">
+        <button type="button" id="up">👍 Correct</button>
+        <button type="button" id="down">👎 Wrong</button>
+      </div>
+      <p id="fb-msg" class="msg"></p>
+    </details>
+
+    <p class="muted">
+      Feedback saved in this browser: <span id="fb-count">0</span> ·
+      <button type="button" id="export" class="link">export</button> ·
+      <button type="button" id="clear" class="link">clear</button>
+    </p>
+    <p class="muted">Excerpts come straight from the regulation. Always check codes and closed lists in the PDF.
+      <a href="parity.html">Parity test</a></p>
+  </section>
+
+  <section id="results" aria-live="polite">
+    <p class="empty">Ask a question about the reporting instructions: codes such as <code>S.23.01</code> or
+      <code>R0540</code> help, and so does the wording used in the regulation.</p>
+  </section>
+</main>
+
+<script type="module">
+import { WebRetriever } from "./js/search.js";
+import { loadEmbedder } from "./js/embed.js";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const FEEDBACK_KEY = "qrt-rag-feedback";
+const KIND = { istruzione: "instruction", tabella: "template table", testo: "text" };
+const CODE_RE = /\b(?:SR|SE|S|E)\.\d{2}\.\d{2}(?:\.\d{2})?\b|\b[RCZ]\d{4}\b/g;
+
+let retriever, cfg, embed = null, last = null;
+
+function setStatus(text, kind = "") {
+  $("model-status").textContent = text;
+  $("model-status").dataset.kind = kind;
+}
+
+// ------------------------------------------------------------ avvio
+try {
+  retriever = await WebRetriever.load("assets/");
+} catch (e) {
+  setStatus("Could not load the index: " + e.message, "error");
+  throw e;
+}
+cfg = retriever.config;
+for (const a of retriever.annexes) {
+  $("annex").insertAdjacentHTML("beforeend", `<option value="${esc(a)}">Annex ${esc(a)}</option>`);
+}
+$("go").disabled = false;
+setStatus("Keyword search ready · loading the semantic model…", "loading");
+updateFeedbackCount();
+loadModel();
+
+async function loadModel() {
+  const files = new Map();
+  try {
+    embed = await loadEmbedder(cfg.model, {
+      onProgress: (p) => {
+        if (p.status !== "progress" || !p.total) return;
+        files.set(p.file, [p.loaded, p.total]);
+        let loaded = 0, total = 0;
+        for (const [l, t] of files.values()) { loaded += l; total += t; }
+        setStatus(`Downloading the semantic model (first visit only): ${Math.round((100 * loaded) / total)}% of ${(total / 1e6).toFixed(0)} MB`, "loading");
+      },
+    });
+    setStatus("Hybrid search ready: keywords + semantic model", "ok");
+    if (last && last.mode === "keyword") runSearch(last);   // aggiorna l'ultima ricerca
+  } catch (e) {
+    console.error(e);
+    setStatus("Semantic model unavailable in this browser: keyword search only", "error");
+  }
+}
+
+// ------------------------------------------------------------ ricerca
+$("k").oninput = () => { $("k-val").textContent = $("k").value; };
+$("form").onsubmit = (ev) => {
+  ev.preventDefault();
+  const q = $("q").value.trim();
+  if (q) runSearch({ q, annex: $("annex").value || null, k: +$("k").value });
+};
+$("q").onkeydown = (ev) => {
+  if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); $("form").requestSubmit(); }
+};
+
+async function runSearch({ q, annex, k }) {
+  const t0 = performance.now();
+  let vectors = null;
+  let mode = "keyword";
+  if (embed) {
+    vectors = await embed(retriever.queryTexts(q));
+    mode = "hybrid";
+  }
+  const hits = retriever.search(q, { k, annex, queryVectors: vectors });
+  last = { q, annex, k, mode, hits, ms: performance.now() - t0 };
+  renderResults();
+  $("tools").hidden = false;
+  $("rate").hidden = false;
+  $("prompt-box").hidden = true;
+  $("copy-msg").textContent = "";
+}
+
+function highlight(text) {
+  return esc(text).replace(CODE_RE, (m) => `<code>${m}</code>`);
+}
+
+function pdfLink(lang, page, approx) {
+  const file = cfg.pdfs?.[lang];
+  if (!file || !page) return "";
+  const title = approx ? "Estimated page (no exact match in this language version)" : "";
+  return `<a href="assets/${encodeURIComponent(file)}#page=${page}" target="_blank" rel="noopener" title="${title}">` +
+    `PDF ${lang.toUpperCase()} p. ${approx ? "≈" : ""}${page}</a>`;
+}
+
+function renderResults() {
+  const { hits, mode, ms, annex } = last;
+  if (!hits.length) {
+    $("results").innerHTML = `<p class="empty">No excerpts found${annex ? ` in Annex ${esc(annex)}` : ""}.</p>`;
+    return;
+  }
+  const how = mode === "hybrid" ? "hybrid search" : "keyword search (semantic model still loading)";
+  const html = hits.map((h, n) => {
+    const [prefix, ...rest] = h.text.split("\n");
+    const body = rest.join("\n");
+    const long = body.length > 700;
+    const ref = cfg.ref_lang && h.page_ref
+      ? pdfLink(cfg.ref_lang, h.page_ref, h.page_ref_method !== "exact") : "";
+    return `<article class="hit">
+      <div class="hit-head">
+        <span class="num">[${n + 1}]</span>
+        ${h.template_full ? `<code>${esc(h.template_full)}</code>` : ""}
+        ${h.annex ? `<span class="chip">Annex ${esc(h.annex)}</span>` : h.article ? `<span class="chip">Article ${esc(h.article)}</span>` : ""}
+        <span class="chip">${KIND[h.kind] || esc(h.kind)}</span>
+        <span class="links">${pdfLink(cfg.lang, h.page, false)}${ref}</span>
+      </div>
+      <p class="prefix">${esc(prefix)}</p>
+      <p class="body${long ? " clamp" : ""}">${highlight(body)}</p>
+      ${long ? `<button type="button" class="link more">Show more</button>` : ""}
+    </article>`;
+  }).join("");
+  $("results").innerHTML =
+    `<p class="results-head">${hits.length} excerpts · ${how} · ${Math.round(ms)} ms</p>` + html;
+}
+
+$("results").onclick = (ev) => {
+  const btn = ev.target.closest(".more");
+  if (!btn) return;
+  const body = btn.previousElementSibling;
+  const open = body.classList.toggle("clamp");
+  btn.textContent = open ? "Show more" : "Show less";
+};
+
+// ------------------------------------------------------------ prompt per un assistente
+function buildPrompt(q, hits, maxChunk = 2000, maxTotal = 16000) {
+  const L = cfg.labels;
+  const parts = [];
+  let total = 0;
+  for (const [i, h] of hits.entries()) {   // come build_context() in Python
+    let text = h.text;
+    if (text.length > maxChunk) text = text.slice(0, maxChunk) + " [...]";
+    const block = `[${i + 1}] (${L.page} ${h.page}, ${h.template_full || h.section || ""})\n${text}`;
+    if (total + block.length > maxTotal && parts.length) break;
+    parts.push(block);
+    total += block.length;
+  }
+  return `${cfg.system_prompt}\n\n<${L.excerpts}>\n${parts.join("\n\n")}\n</${L.excerpts}>\n\n${L.question}: ${q}`;
+}
+
+$("copy").onclick = async () => {
+  if (!last) return;
+  const text = buildPrompt(last.q, last.hits);
+  try {
+    await navigator.clipboard.writeText(text);
+    $("copy-msg").textContent = "Copied: paste it into your assistant and check its answer against the excerpts.";
+    $("prompt-box").hidden = true;
+  } catch {
+    // Negli iframe (es. Hugging Face) gli appunti possono essere bloccati: copia manuale
+    $("prompt-box").value = text;
+    $("prompt-box").hidden = false;
+    $("prompt-box").select();
+    $("copy-msg").textContent = "Your browser blocked the clipboard: the text is selected below, copy it with Ctrl+C.";
+  }
+};
+
+// ------------------------------------------------------------ feedback
+function loadFeedback() {
+  try { return JSON.parse(localStorage.getItem(FEEDBACK_KEY) || "[]"); } catch { return []; }
+}
+function storeFeedback(list) {
+  try { localStorage.setItem(FEEDBACK_KEY, JSON.stringify(list)); return true; } catch { return false; }
+}
+function updateFeedbackCount() { $("fb-count").textContent = loadFeedback().length; }
+
+function saveFeedback(rating) {
+  if (!last) return;
+  // Stesso formato del feedback Gradio: lo legge qrt_rag.evaluation.load_feedback_cases()
+  const rec = {
+    question: last.q, annex: last.annex, k: last.k, mode: last.mode, answer: null, lang: cfg.lang,
+    hits: last.hits.map((h) => ({ id: h.id, page: h.page, template: h.template_full, cells: h.cells })),
+    rating,
+    expected: $("expected").value.trim().toUpperCase() || null,
+    note: $("note").value.trim() || null,
+    time: new Date().toISOString().slice(0, 19),
+  };
+  const list = loadFeedback();
+  list.push(rec);
+  if (!storeFeedback(list)) {
+    $("fb-msg").textContent = "This browser does not allow saving feedback.";
+    return;
+  }
+  $("expected").value = "";
+  $("note").value = "";
+  $("fb-msg").textContent = `Saved (${rating === "up" ? "👍" : "👎"}).`;
+  updateFeedbackCount();
+}
+$("up").onclick = () => saveFeedback("up");
+$("down").onclick = () => saveFeedback("down");
+
+$("export").onclick = () => {
+  const list = loadFeedback();
+  if (!list.length) { $("fb-msg").textContent = "No feedback to export yet."; return; }
+  const blob = new Blob([list.map((r) => JSON.stringify(r)).join("\n") + "\n"], { type: "application/jsonl" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `feedback_${new Date().toISOString().slice(0, 10)}.jsonl`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$("clear").onclick = () => {
+  if (confirm("Delete all feedback saved in this browser? Export it first if you need it.")) {
+    storeFeedback([]);
+    updateFeedbackCount();
+  }
+};
+</script>
 </body>
 </html>
