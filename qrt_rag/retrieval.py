@@ -86,13 +86,20 @@ class Retriever:
         keep = np.array([annex is None or c["annex"] == annex for c in chunks])
         bm = np.where(keep, bm, -np.inf)
 
-        # Reciprocal Rank Fusion delle classifiche disponibili
+        # Reciprocal Rank Fusion delle classifiche disponibili.
+        # Ordinamento stabile (a parita' di punteggio vince l'indice minore) e, per BM25,
+        # solo chunk con punteggio positivo: cosi' la versione JavaScript (web/js/search.js)
+        # produce esattamente la stessa classifica.
         rrf = defaultdict(float)
-        for r, i in enumerate(np.argsort(-bm)[:n_cand]):
+        for r, i in enumerate(np.argsort(-bm, kind="stable")[:n_cand]):
+            if not bm[i] > 0:
+                break
             rrf[int(i)] += 1 / (60 + r)
         if dense is not None:
             dense = np.where(keep, dense, -np.inf)
-            for r, i in enumerate(np.argsort(-dense)[:n_cand]):
+            for r, i in enumerate(np.argsort(-dense, kind="stable")[:n_cand]):
+                if not np.isfinite(dense[i]):
+                    break
                 rrf[int(i)] += 1 / (60 + r)
 
         # Se la domanda contiene template o codici cella, promuove i chunk esatti

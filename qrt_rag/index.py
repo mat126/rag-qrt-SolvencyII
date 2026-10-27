@@ -28,12 +28,24 @@ def load_embedder(model_id=EMBEDDING_MODEL, device=None, max_seq_length=2048):
     return model
 
 
-def embed_chunks(model, chunks, batch_size=16):
-    """Matrice (n_chunk x 1024) di embeddings normalizzati in float32.
+class PrefixedEncoder:
+    """Aggiunge un prefisso alle domande (es. "query: " per i modelli e5), con la
+    stessa interfaccia encode() di SentenceTransformer usata dal Retriever."""
+
+    def __init__(self, model, prefix=""):
+        self.model, self.prefix = model, prefix
+
+    def encode(self, texts, **kwargs):
+        return self.model.encode([self.prefix + t for t in texts], **kwargs)
+
+
+def embed_chunks(model, chunks, batch_size=16, prefix=""):
+    """Matrice (n_chunk x dim) di embeddings normalizzati in float32.
+    prefix: es. "passage: " per i modelli e5.
     Con sequenze lunghe, se la GPU va in out-of-memory, scendi a batch_size=8."""
     t0 = time.time()
     E = model.encode(
-        [c["text"] for c in chunks],
+        [prefix + c["text"] for c in chunks],
         batch_size=batch_size,
         normalize_embeddings=True,
         convert_to_numpy=True,

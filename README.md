@@ -19,10 +19,13 @@ qrt_rag/
   generation.py   LocalLLM (Qwen) and system prompt
   ui.py           Gradio interface with answer rating
   evaluation.py   evaluation set, hit@k and MRR, per-stage diagnostics
+  web_export.py   export of index and parity references for the web version
   eval_set*.json  development set (it, en): 31 questions with expected source + 2 negatives
 notebooks/
   qrt_rag_kaggle.ipynb     end-to-end run on Kaggle (2 x T4 GPU)
   fase2_browser_eval.ipynb  can retrieval run in the browser? small embedding models vs bge-m3
+  fase3_export_web.ipynb    export for the in-browser search (multilingual-e5-small)
+web/                       static, in-browser version of the search (see web/README.md)
 ```
 
 ## Installation

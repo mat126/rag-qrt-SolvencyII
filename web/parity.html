@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG QRT – test di parità</title>
+<style>
+  :root {
+    color-scheme: light;
+    --fg: #1d2730; --bg: #f7f6f2; --card: #fcfcfa; --muted: #5a6570;
+    --ok: #1f7a4d; --ko: #b3261e; --line: #d5dce0; --accent: #1f6f8b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --fg: #e8ecef; --bg: #14191e; --card: #1b2229; --muted: #a3b0ba;
+      --ok: #5fd39a; --ko: #ff8a80; --line: #33404a; --accent: #6cc3e0;
+    }
+  }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg);
+         color: var(--fg); margin: 0; padding: 1.5rem; line-height: 1.45; }
+  h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
+  h2 { font-size: 1.1rem; margin: 1.5rem 0 .5rem; }
+  .muted { color: var(--muted); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: 1rem; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .ko { color: var(--ko); font-weight: 600; }
+  button { font: inherit; padding: .6rem 1rem; border-radius: .5rem; border: 0; margin-top: 1rem;
+           background: var(--accent); color: var(--bg); cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .table-wrap { overflow-x: auto; margin-top: 1rem; }
+  table { border-collapse: collapse; font-size: .9rem; min-width: 60rem; }
+  th, td { border-bottom: 1px solid var(--line); padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<h1>Test di parità Python ↔ browser</h1>
+<p class="muted">Confronta la ricerca in JavaScript con quella Python sulle domande del set di valutazione.
+Il test A usa i vettori delle domande calcolati in Python e deve dare risultati identici;
+il test B calcola i vettori nel browser con il modello quantizzato e misura quanto cambiano.</p>
+<p id="status">Caricamento dell'indice…</p>
+<div id="summary" class="cards"></div>
+<button id="run-e2e" disabled>Test B: modello nel browser (scarica circa 120 MB)</button>
+<div class="table-wrap"><table id="detail"></table></div>
+
+<script type="module">
+import { WebRetriever, isMatch } from "./js/search.js";
+import { loadEmbedder } from "./js/embed.js";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (x) => (x == null ? "–" : x.toFixed(3));
+
+const rankOf = (hits, expected) => {
+  const h = hits.find((h) => isMatch(h, expected));
+  return h ? h.rank : null;
+};
+const metrics = (ranks) => {
+  const n = ranks.length;
+  const hit = (k) => ranks.filter((r) => r !== null && r <= k).length / n;
+  return { hit1: hit(1), hit5: hit(5), hit10: hit(10), mrr: ranks.reduce((s, r) => s + (r ? 1 / r : 0), 0) / n };
+};
+// Prima posizione (1-based) in cui le due liste differiscono; 0 = identiche
+const firstDiff = (a, b) => {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) if (a[i] !== b[i]) return i + 1;
+  return 0;
+};
+
+let t0 = performance.now();
+const retriever = await WebRetriever.load("assets/");
+const parity = await fetch("assets/parity.json").then((r) => r.json());
+const cfg = retriever.config;
+$("status").textContent = `Indice caricato: ${retriever.chunks.length} chunk, modello ${cfg.model.web}, ` +
+  `in ${((performance.now() - t0) / 1000).toFixed(1)} s.`;
+
+// ---------------------------------------------------------------- test A
+t0 = performance.now();
+const rows = parity.map((c) => {
+  const bm = retriever.search(c.q, { k: 20 });
+  const hy = retriever.search(c.q, { k: 20, queryVectors: c.query_vectors.map((v) => Float32Array.from(v)) });
+  const row = {
+    id: c.id, tipo: c.tipo, q: c.q, negative: !!c.expected.negative,
+    tokOk: JSON.stringify(retriever.tokenizeQuery(c.q)) === JSON.stringify(c.tokens),
+    textsOk: JSON.stringify(retriever.queryTexts(c.q)) === JSON.stringify(c.query_texts),
+    scopeOk: retriever.queryScope(c.q) === c.scope,
+    bmDiff: firstDiff(bm.map((h) => h.id), c.bm25_top),
+    hyDiff: firstDiff(hy.map((h) => h.id), c.hybrid_top),
+  };
+  if (!row.negative) {
+    row.rankBm = rankOf(bm, c.expected);
+    row.rankHy = rankOf(hy, c.expected);
+  }
+  return row;
+});
+const msA = (performance.now() - t0) / rows.length;
+const pos = rows.filter((r) => !r.negative);
+const mBm = metrics(pos.map((r) => r.rankBm));
+const mHy = metrics(pos.map((r) => r.rankHy));
+const py = cfg.python_metrics;
+const count = (f) => rows.filter(f).length;
+
+function card(title, lines) {
+  return `<div class="card"><strong>${title}</strong><br>${lines.join("<br>")}</div>`;
+}
+const check = (ok, n) => `<span class="${ok === n ? "ok" : "ko"}">${ok}/${n}</span>`;
+let summary =
+  card("Test A · logica identica?", [
+    `Token delle domande: ${check(count((r) => r.tokOk), rows.length)}`,
+    `Testi da codificare: ${check(count((r) => r.textsOk), rows.length)}`,
+    `Allegato implicito: ${check(count((r) => r.scopeOk), rows.length)}`,
+    `Classifica solo BM25 (top 20): ${check(count((r) => r.bmDiff === 0), rows.length)}`,
+    `Classifica ibrida (top 20): ${check(count((r) => r.hyDiff === 0), rows.length)}`,
+    `<span class="muted">${msA.toFixed(0)} ms per domanda (due ricerche)</span>`,
+  ]) +
+  card("Test A · metriche", [
+    `Solo BM25: hit@5 ${fmt(mBm.hit5)} · MRR ${fmt(mBm.mrr)} <span class="muted">(Python ${fmt(py["solo BM25"]["hit@5"])} · ${fmt(py["solo BM25"].MRR)})</span>`,
+    `Ibrida: hit@5 ${fmt(mHy.hit5)} · MRR ${fmt(mHy.mrr)} <span class="muted">(Python ${fmt(py["BM25 + embeddings"]["hit@5"])} · ${fmt(py["BM25 + embeddings"].MRR)})</span>`,
+  ]);
+$("summary").innerHTML = summary;
+render();
+$("run-e2e").disabled = false;
+
+// ---------------------------------------------------------------- test B
+$("run-e2e").onclick = async () => {
+  $("run-e2e").disabled = true;
+  $("status").textContent = "Scarico il modello…";
+  const embed = await loadEmbedder(cfg.model, {
+    onProgress: (p) => {
+      if (p.status === "progress" && p.total) $("status").textContent = `Scarico ${p.file}: ${Math.round(p.progress)}%`;
+    },
+  });
+  let ms = 0;
+  for (const [j, c] of parity.entries()) {
+    $("status").textContent = `Test B: domanda ${j + 1} di ${parity.length}…`;
+    const t = performance.now();
+    const vecs = await embed(retriever.queryTexts(c.q));
+    const hits = retriever.search(c.q, { k: 20, queryVectors: vecs });
+    ms += performance.now() - t;
+    const top10 = new Set(hits.slice(0, 10).map((h) => h.id));
+    rows[j].overlap = c.hybrid_top.slice(0, 10).filter((id) => top10.has(id)).length;
+    if (!rows[j].negative) rows[j].rankE2E = rankOf(hits, c.expected);
+  }
+  const mE = metrics(pos.map((r) => r.rankE2E));
+  const avgOverlap = rows.reduce((s, r) => s + r.overlap, 0) / rows.length;
+  $("summary").innerHTML = summary + card("Test B · modello nel browser", [
+    `Ibrida: hit@5 ${fmt(mE.hit5)} · hit@10 ${fmt(mE.hit10)} · MRR ${fmt(mE.mrr)}`,
+    `Primi 10 in comune con Python: ${avgOverlap.toFixed(1)} su 10 in media`,
+    `<span class="muted">${(ms / parity.length).toFixed(0)} ms per domanda (embedding + ricerca)</span>`,
+  ]);
+  $("status").textContent = "Test B completato.";
+  render();
+};
+
+function render() {
+  const mark = (ok) => (ok ? '<span class="ok">✓</span>' : '<span class="ko">✗</span>');
+  const diff = (d) => (d === 0 ? mark(true) : `<span class="ko">diverge al ${d}°</span>`);
+  const rank = (r, neg) => (neg ? "neg." : r ?? "oltre 20");
+  $("detail").innerHTML =
+    "<tr><th>id</th><th>tipo</th><th>token</th><th>scope</th><th>BM25 = Py</th><th>ibrida = Py</th>" +
+    "<th>pos. A</th><th>pos. B</th><th>top 10 comuni (B)</th><th>domanda</th></tr>" +
+    rows.map((r) =>
+      `<tr><td>${r.id}</td><td>${r.tipo}</td><td>${mark(r.tokOk && r.textsOk)}</td><td>${mark(r.scopeOk)}</td>` +
+      `<td>${diff(r.bmDiff)}</td><td>${diff(r.hyDiff)}</td>` +
+      `<td class="num">${rank(r.rankHy, r.negative)}</td>` +
+      `<td class="num">${r.overlap === undefined ? "–" : rank(r.rankE2E, r.negative)}</td>` +
+      `<td class="num">${r.overlap ?? "–"}</td><td>${esc(r.q)}</td></tr>`
+    ).join("");
+}
+</script>
+</body>
+</html>
