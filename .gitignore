@@ -1,0 +1,21 @@
+# Dati e output: non vanno nel repository
+*.pdf
+*.zip
+pages/
+index/
+data/
+tmp_batches/
+feedback*.jsonl
+eval_*.csv
+*.npy
+chunks.jsonl
+
+# Python e notebook
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.ipynb_checkpoints/
+.venv/
+.env

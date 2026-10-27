@@ -1,0 +1,316 @@
+[
+ {
+  "id": "c01",
+  "tipo": "codici",
+  "q": "Cosa va riportato in S.02.01 C0020/R0010?",
+  "annex": "II",
+  "template": "S.02.01",
+  "cells": [
+   "R0010"
+  ]
+ },
+ {
+  "id": "c02",
+  "tipo": "codici",
+  "q": "Istruzioni per la cella R0540 del template S.23.01",
+  "annex": "II",
+  "template": "S.23.01",
+  "cells": [
+   "R0540"
+  ]
+ },
+ {
+  "id": "c03",
+  "tipo": "codici",
+  "q": "Cosa indica R0620 in S.23.01?",
+  "annex": "II",
+  "template": "S.23.01",
+  "cells": [
+   "R0620"
+  ]
+ },
+ {
+  "id": "c04",
+  "tipo": "codici",
+  "q": "Cosa si riporta in S.25.01 R0100?",
+  "annex": "II",
+  "template": "S.25.01",
+  "cells": [
+   "R0100"
+  ]
+ },
+ {
+  "id": "c05",
+  "tipo": "codici",
+  "q": "Come compilare la cella C0060/R0050 di S.22.01?",
+  "annex": "II",
+  "template": "S.22.01",
+  "cells": [
+   "C0060",
+   "R0050"
+  ]
+ },
+ {
+  "id": "c06",
+  "tipo": "codici",
+  "q": "S.01.01 C0010/R0040: quali opzioni sono ammesse?",
+  "annex": "II",
+  "template": "S.01.01",
+  "cells": [
+   "C0010",
+   "R0040"
+  ]
+ },
+ {
+  "id": "n01",
+  "tipo": "linguaggio",
+  "q": "Dove si segnala l'avviamento nello stato patrimoniale?",
+  "annex": "II",
+  "template": "S.02.01",
+  "cells": [
+   "R0010"
+  ]
+ },
+ {
+  "id": "n02",
+  "tipo": "linguaggio",
+  "q": "Come si riportano le attivita' fiscali differite nello stato patrimoniale?",
+  "annex": "II",
+  "template": "S.02.01",
+  "cells": [
+   "R0040"
+  ]
+ },
+ {
+  "id": "n03",
+  "tipo": "linguaggio",
+  "q": "Istruzioni per le spese di acquisizione differite nello stato patrimoniale",
+  "annex": "II",
+  "template": "S.02.01",
+  "cells": [
+   "R0020"
+  ]
+ },
+ {
+  "id": "n04",
+  "tipo": "linguaggio",
+  "q": "Come si calcola il rapporto tra fondi propri ammissibili e SCR?",
+  "annex": "II",
+  "template": "S.23.01",
+  "cells": [
+   "R0620"
+  ]
+ },
+ {
+  "id": "n05",
+  "tipo": "linguaggio",
+  "q": "Totale dei fondi propri disponibili per soddisfare l'SCR",
+  "annex": "II",
+  "template": "S.23.01",
+  "cells": [
+   "R0500"
+  ]
+ },
+ {
+  "id": "n06",
+  "tipo": "linguaggio",
+  "q": "Quali sono le istruzioni per il totale dei fondi propri ammissibili per soddisfare l'SCR?",
+  "annex": "II",
+  "template": "S.23.01",
+  "cells": [
+   "R0540"
+  ]
+ },
+ {
+  "id": "n07",
+  "tipo": "linguaggio",
+  "q": "Fondi propri ammissibili per soddisfare l'SCR senza l'aggiustamento per la volatilita'",
+  "template": "S.22.01",
+  "cells": [
+   "C0060",
+   "R0050"
+  ]
+ },
+ {
+  "id": "n08",
+  "tipo": "linguaggio",
+  "q": "Fondi propri ammissibili senza la misura transitoria sulle riserve tecniche",
+  "annex": "II",
+  "template": "S.22.01",
+  "cells": [
+   "C0020",
+   "R0050"
+  ]
+ },
+ {
+  "id": "n09",
+  "tipo": "linguaggio",
+  "q": "Requisito patrimoniale di solvibilita' di base lordo nella formula standard",
+  "annex": "II",
+  "template": "S.25.01",
+  "cells": [
+   "C0040",
+   "R0100"
+  ]
+ },
+ {
+  "id": "n10",
+  "tipo": "linguaggio",
+  "q": "Requisito patrimoniale di solvibilita' di base netto nella formula standard",
+  "annex": "II",
+  "template": "S.25.01",
+  "cells": [
+   "C0030",
+   "R0100"
+  ]
+ },
+ {
+  "id": "n11",
+  "tipo": "linguaggio",
+  "q": "Nel contenuto della segnalazione, come indicare se le cifre si riferiscono a un fondo separato o alla parte restante?",
+  "annex": "II",
+  "template": "S.01.01",
+  "cells": [
+   "Z0010"
+  ]
+ },
+ {
+  "id": "n12",
+  "tipo": "linguaggio",
+  "q": "Dove si indica se e' stato presentato il modello sulle partecipazioni detenute?",
+  "annex": "II",
+  "template": "S.01.01",
+  "cells": [
+   "C0010",
+   "R0450"
+  ]
+ },
+ {
+  "id": "n13",
+  "tipo": "linguaggio",
+  "q": "Come segnalare che il modello sugli elementi fuori bilancio non e' stato presentato?",
+  "annex": "II",
+  "template": "S.01.01",
+  "cells": [
+   "C0010",
+   "R0060"
+  ]
+ },
+ {
+  "id": "n14",
+  "tipo": "linguaggio",
+  "q": "Contratti di concessione di titoli in prestito: come indicare se il modello e' presentato",
+  "annex": "II",
+  "template": "S.01.01",
+  "cells": [
+   "C0010",
+   "R0200"
+  ]
+ },
+ {
+  "id": "n15",
+  "tipo": "linguaggio",
+  "q": "Elenco delle attivita': come indicare l'esonero ai sensi dell'articolo 35",
+  "annex": "II",
+  "template": "S.01.01",
+  "cells": [
+   "C0010",
+   "R0140"
+  ]
+ },
+ {
+  "id": "g01",
+  "tipo": "gruppi",
+  "q": "Per i gruppi, quali sono le istruzioni per l'avviamento nello stato patrimoniale?",
+  "annex": "III",
+  "template": "S.02.01",
+  "cells": [
+   "R0010"
+  ]
+ },
+ {
+  "id": "g02",
+  "tipo": "gruppi",
+  "q": "Totale dei fondi propri ammissibili per soddisfare l'SCR di gruppo totale",
+  "annex": "III",
+  "template": "S.23.01",
+  "cells": [
+   "R0660"
+  ]
+ },
+ {
+  "id": "g03",
+  "tipo": "gruppi",
+  "q": "Fondi propri ammissibili per soddisfare la parte consolidata dell'SCR di gruppo",
+  "annex": "III",
+  "template": "S.23.01",
+  "cells": [
+   "R0560"
+  ]
+ },
+ {
+  "id": "g04",
+  "tipo": "gruppi",
+  "q": "Fondi propri ammissibili della singola impresa a copertura dell'SCR nei requisiti delle imprese del gruppo",
+  "annex": "III",
+  "template": "S.33.01",
+  "cells": [
+   "C0140"
+  ]
+ },
+ {
+  "id": "g05",
+  "tipo": "gruppi",
+  "q": "Requisito patrimoniale di solvibilita' di base netto per i gruppi che usano la formula standard",
+  "annex": "III",
+  "template": "S.25.01",
+  "cells": [
+   "C0030",
+   "R0100"
+  ]
+ },
+ {
+  "id": "a01",
+  "tipo": "articoli",
+  "q": "Qual e' la valuta di segnalazione per le singole imprese?",
+  "article": "2"
+ },
+ {
+  "id": "a02",
+  "tipo": "articoli",
+  "q": "Quali semplificazioni sono consentite per la segnalazione trimestrale delle singole imprese?",
+  "article": "7"
+ },
+ {
+  "id": "a03",
+  "tipo": "articoli",
+  "q": "Quali modelli annuali presentano le imprese di riassicurazione captive sul requisito patrimoniale di solvibilita'?",
+  "article": "20"
+ },
+ {
+  "id": "a04",
+  "tipo": "articoli",
+  "q": "Quali informazioni sul requisito patrimoniale di solvibilita' presentano annualmente i gruppi?",
+  "article": "34"
+ },
+ {
+  "id": "m01",
+  "tipo": "modelli",
+  "q": "Quali righe contiene il modello S.02.01.02 dello stato patrimoniale?",
+  "annex": "I",
+  "template": "S.02.01",
+  "cells": []
+ },
+ {
+  "id": "x01",
+  "tipo": "negativa",
+  "q": "Qual e' la soglia di materialita' prevista dall'IFRS 17?",
+  "negative": true
+ },
+ {
+  "id": "x02",
+  "tipo": "negativa",
+  "q": "Quale tasso di cambio euro/dollaro va usato al 31 dicembre 2023?",
+  "negative": true
+ }
+]

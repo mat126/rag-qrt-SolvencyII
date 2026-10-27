@@ -1,0 +1,5 @@
+# Versione CPU di PyTorch: molto piu' leggera di quella con CUDA, che qui non serve
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+huggingface_hub
+qrt-rag[ui] @ git+https://github.com/mat126/rag-qrt.git
