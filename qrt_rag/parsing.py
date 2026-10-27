@@ -3,8 +3,10 @@
 Richiede gli extra [parsing] (docling, pypdf); su GPU T4 circa 25 minuti
 per le 1597 pagine del Regolamento (UE) 2023/894.
 """
+import fnmatch
 import gc
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -95,7 +97,14 @@ def load_pages(src_dir, normalize=True, verbose=True):
     trattini di sillabazione invisibili (U+00AD) e lo spazio che li segue.
     """
     src_dir = Path(src_dir)
-    page_files = sorted(src_dir.rglob("pages_*.json"))
+    # os.walk con followlinks=True: su Kaggle le cartelle dei Dataset possono essere
+    # collegamenti simbolici, che Path.rglob (Python 3.13) non attraversa
+    page_files = sorted(
+        Path(root) / name
+        for root, _, files in os.walk(src_dir, followlinks=True)
+        for name in files
+        if fnmatch.fnmatch(name, "pages_*.json")
+    )
     if not page_files:
         raise FileNotFoundError(f"Nessun file pages_*.json in {src_dir} (cercato anche nelle sottocartelle)")
     if verbose:
