@@ -57,7 +57,8 @@ SCOPE_RE = {
 # Per l'inglese la formula va verificata sul testo reale (vedi print_chunk_stats).
 ANNEX_TITLE_RE = {
     "it": re.compile(r"^.*segnalazione\s+(?:delle|dei|degli)\s+", re.I),
-    "en": re.compile(r"^.*reporting\s+(?:for|of|by)\s+(?:the\s+)?", re.I),
+    # "Instructions regarding reporting templates for individual undertakings" -> "individual undertakings"
+    "en": re.compile(r"^.*(?:reporting|templates)\s+(?:for|of|by)\s+(?:the\s+)?", re.I),
 }
 
 LABELS = {

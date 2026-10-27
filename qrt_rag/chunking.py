@@ -12,11 +12,22 @@ from statistics import median
 from .codes import RE_CELL, RE_TEMPLATE, template_base, template_full
 from .lang import ANNEX_TITLE_RE, LABELS, check_lang
 
-RE_ANNEX = re.compile(r"^(?:#+\s*)?\**\s*(ALLEGATO|ANNEX)\s+([IVXLC]+)\b", re.I)
+# Titolo di allegato: riga a se', in maiuscolo ("ALLEGATO II", "ANNEX II"). Una regola piu'
+# larga scambiava per titoli i riferimenti come "Annex I to Delegated Regulation ..."
+RE_ANNEX = re.compile(r"^(?:#+\s*)?\**\s*(ALLEGATO|ANNEX)\s+([IVXLC]+)\s*\**\s*$")
 RE_ARTICLE = re.compile(r"^(?:#+\s*)?\**\s*(Articolo|Article)\s+(\d+)\b", re.I)
 RE_TMPL_HEADING = re.compile(r"^(?:#+\s*)?\**\s*(SR|SE|S|E)\.\s?\d{2}\.\d{2}")
 RE_SEP = re.compile(r"^\|?\s*:?-{3,}")
 GENERIC_SECTIONS = {"osservazioni generali", "general comments"}
+
+
+def roman_to_int(s):
+    vals = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
+    total = 0
+    for a, b in zip(s, s[1:] + " "):
+        v = vals[a]
+        total += -v if vals.get(b, 0) > v else v
+    return total
 
 
 def clean_row(line):
@@ -59,7 +70,7 @@ class Chunker:
         if self.template_title:
             parts.append(self.template_title[:120])
         if (self.section and self.section != self.template_title
-                and self.section.lower() not in GENERIC_SECTIONS):
+                and self.section.lower().rstrip(" :.") not in GENERIC_SECTIONS):
             parts.append(self.section[:120])
         if self.template_full and not any(self.template_full in p for p in parts):
             parts.append(self.template_full)
@@ -133,6 +144,10 @@ class Chunker:
         clean = line.lstrip("#").strip().strip("*").strip()
         is_heading = line.startswith("#")
         m_annex = RE_ANNEX.match(line) if len(clean) < 80 else None
+        # Gli allegati compaiono in ordine (I, II, III...): un "ALLEGATO" con numero non
+        # successivo a quello corrente non e' un nuovo allegato
+        if m_annex and roman_to_int(m_annex.group(2).upper()) <= roman_to_int(self.annex or ""):
+            m_annex = None
         m_art = RE_ARTICLE.match(line) if len(clean) < 60 else None
 
         if m_annex:
