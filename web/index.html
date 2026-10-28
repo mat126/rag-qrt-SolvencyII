@@ -67,13 +67,45 @@
   code { background: var(--code); color: var(--code-fg); border-radius: .25rem; padding: 0 .25rem;
          font-family: ui-monospace, Consolas, monospace; font-size: .88em; }
   .empty { color: var(--muted); padding: 2rem 0; }
+  header { display: flex; align-items: start; gap: 1rem; }
+  header .titles { flex: 1; }
+  dialog#guide { border: 1px solid var(--line); border-radius: .8rem; padding: 0; width: min(38rem, 92vw);
+                 background: var(--card); color: var(--fg); }
+  dialog#guide::backdrop { background: rgba(10, 15, 20, .55); }
+  .guide-inner { padding: 1.4rem 1.5rem 1.1rem; }
+  .guide-step { color: var(--muted); font-size: .85rem; margin: 0; }
+  .guide-inner h2 { margin: .2rem 0 .7rem; font-size: 1.2rem; }
+  .guide-inner ul { margin: 0; padding-left: 1.2rem; }
+  .guide-inner li { margin-bottom: .5rem; }
+  .guide-nav { display: flex; align-items: center; gap: .6rem; padding: .9rem 1.5rem 1.2rem;
+               border-top: 1px solid var(--line); }
+  .dots { flex: 1; display: flex; gap: .35rem; }
+  .dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--line); }
+  .dot.on { background: var(--accent); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Solvency II reporting instructions search</h1>
-  <p>Commission Implementing Regulation (EU) 2023/894 · quantitative reporting templates (QRT) · runs entirely in your browser</p>
+  <div class="titles">
+    <h1>Solvency II reporting instructions search</h1>
+    <p>Commission Implementing Regulation (EU) 2023/894 · quantitative reporting templates (QRT) · runs entirely in your browser</p>
+  </div>
+  <button type="button" id="open-guide">How to use</button>
 </header>
+
+<dialog id="guide" aria-labelledby="guide-title">
+  <div class="guide-inner">
+    <p class="guide-step" id="guide-step"></p>
+    <h2 id="guide-title"></h2>
+    <div id="guide-body"></div>
+  </div>
+  <div class="guide-nav">
+    <div class="dots" id="guide-dots"></div>
+    <button type="button" id="guide-skip" class="link">Skip</button>
+    <button type="button" id="guide-back">Back</button>
+    <button type="button" id="guide-next" class="primary">Next</button>
+  </div>
+</dialog>
 
 <main class="layout">
   <section class="panel">
@@ -143,6 +175,73 @@ const KIND = { istruzione: "instruction", tabella: "template table", testo: "tex
 const CODE_RE = /\b(?:SR|SE|S|E)\.\d{2}\.\d{2}(?:\.\d{2})?\b|\b[RCZ]\d{4}\b/g;
 
 let retriever, cfg, embed = null, last = null;
+
+// ------------------------------------------------------------ guida introduttiva
+const GUIDE_KEY = "qrt-rag-guide-seen";
+const GUIDE = [
+  {
+    title: "Ask a precise question",
+    body: `<ul>
+      <li>Use template and cell codes when you know them: <em>What must be reported in <code>S.23.01</code> <code>R0540</code>?</em></li>
+      <li>Use the wording of the regulation: <em>eligible own funds to meet the SCR</em> works better than <em>own funds covering the SCR</em>.</li>
+      <li>Say whether you mean <strong>individual undertakings</strong> or <strong>groups</strong>, or use the Annex filter
+        (II = individual undertakings, III = groups). For questions on the articles keep <em>All</em>.</li>
+      <li>One topic per question. The search returns the relevant excerpts of the regulation; it does not write an answer.</li>
+    </ul>`,
+  },
+  {
+    title: "Get an answer from Copilot",
+    body: `<ul>
+      <li>After a search, click <strong>Copy prompt for an AI assistant</strong>: it copies the instructions,
+        the numbered excerpts and your question.</li>
+      <li>Open a <strong>new chat</strong> in Copilot (or any other assistant), paste and send.
+        Add <em>Answer in Italian</em> at the end if you prefer.</li>
+      <li>Check every citation [n] against excerpt [n] here, especially codes and closed lists.
+        <strong>PDF EN</strong> opens the official text at the exact page; <strong>PDF IT</strong> opens the Italian
+        version (≈ means an estimated page).</li>
+    </ul>`,
+  },
+  {
+    title: "Rate the results",
+    body: `<ul>
+      <li>After a search, open <strong>Rate these results</strong>.</li>
+      <li>If you know where the answer is, write the <strong>expected source</strong>, e.g. <code>S.23.01 R0540</code>
+        or <em>Article 2</em>, and a short note: <em>correct</em>, <em>partial</em> or <em>wrong</em>.</li>
+      <li>Click 👍 or 👎. Ratings are used to measure and improve the search. They are stored anonymously:
+        never include confidential information.</li>
+    </ul>`,
+  },
+];
+let guideIdx = 0;
+
+function showGuideStep(i) {
+  guideIdx = i;
+  $("guide-step").textContent = `Step ${i + 1} of ${GUIDE.length}`;
+  $("guide-title").textContent = GUIDE[i].title;
+  $("guide-body").innerHTML = GUIDE[i].body;
+  $("guide-dots").innerHTML = GUIDE.map((_, j) => `<span class="dot${j === i ? " on" : ""}"></span>`).join("");
+  $("guide-back").disabled = i === 0;
+  $("guide-next").textContent = i === GUIDE.length - 1 ? "Start searching" : "Next";
+}
+function openGuide() {
+  showGuideStep(0);
+  $("guide").showModal();
+}
+function closeGuide() {
+  $("guide").close();
+}
+$("guide").addEventListener("close", () => {
+  try { localStorage.setItem(GUIDE_KEY, "1"); } catch { /* storage non disponibile */ }
+  $("q").focus();
+});
+$("guide-next").onclick = () => (guideIdx < GUIDE.length - 1 ? showGuideStep(guideIdx + 1) : closeGuide());
+$("guide-back").onclick = () => guideIdx > 0 && showGuideStep(guideIdx - 1);
+$("guide-skip").onclick = closeGuide;
+$("open-guide").onclick = openGuide;
+
+let guideSeen = false;
+try { guideSeen = localStorage.getItem(GUIDE_KEY) === "1"; } catch { /* storage non disponibile */ }
+if (!guideSeen) openGuide();   // solo alla prima visita
 
 function setStatus(text, kind = "") {
   $("model-status").textContent = text;
@@ -352,7 +451,7 @@ async function saveFeedback(rating) {
   const emoji = rating === "up" ? "👍" : "👎";
   $("fb-msg").textContent = remote === false
     ? `Saved in this browser only (${emoji}): the feedback server could not be reached.`
-    : `Saved (${emoji}). Thank you!`;
+    : remote === true ? `Saved (${emoji}). Thank you!` : `Saved in this browser (${emoji}).`;
   updateFeedbackCount();
 }
 $("up").onclick = () => saveFeedback("up");
