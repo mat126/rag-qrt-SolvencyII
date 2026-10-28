@@ -27,6 +27,7 @@ notebooks/
   qrt_rag_kaggle.ipynb     end-to-end run on Kaggle (2 x T4 GPU)
   fase2_browser_eval.ipynb  can retrieval run in the browser? small embedding models vs bge-m3
   fase3_export_web.ipynb    export for the in-browser search (multilingual-e5-small)
+  fase3b_export_web_it.ipynb  optional Italian index for the web version
 web/                       static, in-browser version of the search (see web/README.md)
 supabase/feedback.sql      optional feedback table (insert-only for the public key)
 ```

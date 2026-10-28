@@ -46,13 +46,15 @@ def query_texts(query, lang):
 
 
 def export_web(out_dir, chunks, E, encoder, model_info, cases, lang="en",
-               n_cand=40, depth=20, pdfs=None, ref_lang=None, ref_pages=None):
+               n_cand=40, depth=20, pdfs=None, ref_lang=None, ref_pages=None, suffix=""):
     """encoder: oggetto con encode() per le domande (es. PrefixedEncoder con "query: ").
     model_info: dict con "hf" (nome Hugging Face), "web" (nome per transformers.js),
     "q_prefix", "p_prefix", "pooling" ("mean" per e5).
     pdfs: nomi dei PDF in web/assets per lingua, es. {"en": "regulation_en.pdf", "it": ...}.
     ref_lang, ref_pages: lingua della seconda versione e, per ogni chunk, la pagina
-    corrispondente come prodotta da qrt_rag.alignment.align_pages()."""
+    corrispondente come prodotta da qrt_rag.alignment.align_pages().
+    suffix: aggiunto ai nomi dei file (es. "_it" -> chunks_it.json), per esportare
+    una seconda lingua senza toccare i file della prima."""
     check_lang(lang)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -64,12 +66,13 @@ def export_web(out_dir, chunks, E, encoder, model_info, cases, lang="en",
             raise ValueError("ref_pages deve avere un elemento per chunk")
         for d, a in zip(light, ref_pages):
             d["page_ref"], d["page_ref_method"] = a["page"], a["method"]
-    (out / "chunks.json").write_text(json.dumps(light, ensure_ascii=False), encoding="utf-8")
+            d["ref_id"] = a.get("ref_id")
+    (out / f"chunks{suffix}.json").write_text(json.dumps(light, ensure_ascii=False), encoding="utf-8")
 
     # 2. Embeddings in float16: il browser lavora con questi, quindi anche i
     #    riferimenti Python qui sotto usano la stessa versione arrotondata
     E16 = E.astype("<f2")
-    (out / "embeddings.f16.bin").write_bytes(E16.tobytes())
+    (out / f"embeddings{suffix}.f16.bin").write_bytes(E16.tobytes())
     E_ref = E16.astype("float32")
 
     # 3. Vettori delle domande, calcolati una volta sola
@@ -98,9 +101,9 @@ def export_web(out_dir, chunks, E, encoder, model_info, cases, lang="en",
             "bm25_top": [h["id"] for h in r_bm.search(c["q"], k=depth, n_cand=n_cand)],
             "hybrid_top": [h["id"] for h in r_hyb.search(c["q"], k=depth, n_cand=n_cand)],
         })
-    (out / "parity.json").write_text(json.dumps(parity, ensure_ascii=False), encoding="utf-8")
-    (out / "eval_set.json").write_text(json.dumps(cases, ensure_ascii=False, indent=1),
-                                       encoding="utf-8")
+    (out / f"parity{suffix}.json").write_text(json.dumps(parity, ensure_ascii=False), encoding="utf-8")
+    (out / f"eval_set{suffix}.json").write_text(json.dumps(cases, ensure_ascii=False, indent=1),
+                                                encoding="utf-8")
 
     # 5. Metriche Python con gli embeddings float16 (devono restare quelle della fase 2)
     metrics = {
@@ -112,7 +115,7 @@ def export_web(out_dir, chunks, E, encoder, model_info, cases, lang="en",
     re_group, re_solo = SCOPE_RE[lang]
     config = {
         "created": datetime.datetime.now().isoformat(timespec="seconds"),
-        "lang": lang,
+        "lang": lang, "suffix": suffix,
         "n_chunks": len(chunks), "dim": int(E.shape[1]), "dtype": "float16",
         "model": model_info,
         "pdfs": pdfs or {}, "ref_lang": ref_lang,
@@ -131,8 +134,8 @@ def export_web(out_dir, chunks, E, encoder, model_info, cases, lang="en",
         "python_metrics": {k: {m: (round(float(v), 4) if isinstance(v, float) else v)
                                for m, v in row.items()} for k, row in metrics.items()},
     }
-    (out / "config.json").write_text(json.dumps(config, ensure_ascii=False, indent=1),
-                                     encoding="utf-8")
+    (out / f"config{suffix}.json").write_text(json.dumps(config, ensure_ascii=False, indent=1),
+                                              encoding="utf-8")
 
     sizes = {p.name: round(p.stat().st_size / 1e6, 2) for p in sorted(out.iterdir())}
     print("File esportati (MB):", sizes)

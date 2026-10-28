@@ -61,11 +61,17 @@ export class WebRetriever {
     this.buildBM25();
   }
 
-  static async load(base = "assets/") {
+  // suffix: "" per la lingua principale, "_it" per i file italiani (chunks_it.json, ...)
+  static async load(base = "assets/", suffix = "") {
+    const get = async (name, kind) => {
+      const r = await fetch(base + name);
+      if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+      return kind === "json" ? r.json() : r.arrayBuffer();
+    };
     const [config, chunks, buf] = await Promise.all([
-      fetch(base + "config.json").then((r) => r.json()),
-      fetch(base + "chunks.json").then((r) => r.json()),
-      fetch(base + "embeddings.f16.bin").then((r) => r.arrayBuffer()),
+      get(`config${suffix}.json`, "json"),
+      get(`chunks${suffix}.json`, "json"),
+      get(`embeddings${suffix}.f16.bin`, "bin"),
     ]);
     const E = f16ToF32(new Uint16Array(buf));   // little-endian, come scritto da Python
     if (E.length !== config.n_chunks * config.dim) {

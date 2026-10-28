@@ -32,7 +32,8 @@ def _first_pages(chunks, key_fn):
 
 def align_pages(src_chunks, ref_chunks):
     """Per ogni chunk di src_chunks, la pagina stimata nella versione di ref_chunks.
-    Restituisce una lista di dict {"page": int, "method": str} nello stesso ordine."""
+    Restituisce una lista di dict {"page", "method", "ref_id"} nello stesso ordine:
+    ref_id e' l'id del chunk corrispondente quando l'abbinamento e' esatto, altrimenti None."""
     def instr_key(c):
         return ((c["annex"], c["template"], code_field(c))
                 if c["kind"] == "istruzione" and c["template"] else None)
@@ -43,18 +44,28 @@ def align_pages(src_chunks, ref_chunks):
     def tmpl_key(c):
         return (c["annex"], c["template_full"]) if c["template_full"] else None
 
-    ref_instr = _first_pages(ref_chunks, instr_key)
+    # La stessa chiave puo' comparire piu' volte (es. stessa cella in sezioni diverse
+    # dello stesso template): la k-esima occorrenza si abbina alla k-esima dell'altra versione
+    ref_instr = {}
+    for j, c in enumerate(ref_chunks):
+        k = instr_key(c)
+        if k is not None:
+            ref_instr.setdefault(k, []).append((c["page"], j))
     ref_art, src_art = _first_pages(ref_chunks, article_key), _first_pages(src_chunks, article_key)
     ref_tmpl, src_tmpl = _first_pages(ref_chunks, tmpl_key), _first_pages(src_chunks, tmpl_key)
     max_ref = max(c["page"] for c in ref_chunks)
 
     out = [None] * len(src_chunks)
     anchors = []                                   # (pagina src, pagina ref) delle istruzioni abbinate
+    seen = Counter()
     for i, c in enumerate(src_chunks):
         k = instr_key(c)
         if k is not None and k in ref_instr:
-            out[i] = {"page": ref_instr[k], "method": "exact"}
-            anchors.append((c["page"], ref_instr[k]))
+            matches = ref_instr[k]
+            ref_page, ref_idx = matches[min(seen[k], len(matches) - 1)]
+            seen[k] += 1
+            out[i] = {"page": ref_page, "method": "exact", "ref_id": ref_chunks[ref_idx]["id"]}
+            anchors.append((c["page"], ref_page))
     anchors.sort()
     anchor_pages = [a[0] for a in anchors]
 
@@ -72,7 +83,7 @@ def align_pages(src_chunks, ref_chunks):
             page, method = c["page"] + (rp - sp), "offset"
         else:
             page, method = c["page"], "offset"
-        out[i] = {"page": int(min(max(page, 1), max_ref)), "method": method}
+        out[i] = {"page": int(min(max(page, 1), max_ref)), "method": method, "ref_id": None}
     return out
 
 

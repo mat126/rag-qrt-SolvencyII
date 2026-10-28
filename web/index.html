@@ -82,6 +82,9 @@
   .dots { flex: 1; display: flex; gap: .35rem; }
   .dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--line); }
   .dot.on { background: var(--accent); }
+  .other { border-left: 3px solid var(--accent); padding: .2rem 0 .2rem .7rem; margin-top: .5rem; }
+  .other .prefix { margin-top: 0; }
+  .hit-actions { display: flex; gap: 1rem; margin-top: .3rem; }
 </style>
 </head>
 <body>
@@ -111,17 +114,23 @@
   <section class="panel">
     <form id="form">
       <label for="q">Question</label>
-      <textarea id="q" rows="3" placeholder="e.g. What must be reported in S.23.01 R0540?"></textarea>
+      <textarea id="q" rows="3" placeholder="e.g. What must be reported in S.23.01 R0540? / Cosa va riportato in S.23.01 R0540?"></textarea>
       <div class="row" style="margin-top:.6rem">
         <div>
           <label for="annex">Annex</label>
           <select id="annex"><option value="">All (recommended)</option></select>
         </div>
         <div>
-          <label for="k">Excerpts: <output id="k-val">10</output></label>
-          <input type="range" id="k" min="3" max="15" value="10">
+          <label for="lang">Language</label>
+          <select id="lang">
+            <option value="auto">Auto</option>
+            <option value="en">English</option>
+            <option value="it">Italiano</option>
+          </select>
         </div>
       </div>
+      <label for="k" style="margin-top:.6rem">Excerpts: <output id="k-val">10</output></label>
+      <input type="range" id="k" min="3" max="15" value="10">
       <button type="submit" id="go" class="primary" style="margin-top:.8rem;width:100%" disabled>Search</button>
     </form>
 
@@ -153,13 +162,14 @@
       <button type="button" id="export" class="link">export</button> ·
       <button type="button" id="clear" class="link">clear</button>
     </p>
-    <p class="muted">Excerpts come straight from the regulation. Always check codes and closed lists in the PDF.
-      <a href="parity.html">Parity test</a></p>
+    <p class="muted">Excerpts come straight from the regulation; the English version is the official text used for
+      this tool. Always check codes and closed lists in the PDF.
+      Parity tests: <a href="parity.html">EN</a> · <a href="parity.html?lang=it">IT</a></p>
   </section>
 
   <section id="results" aria-live="polite">
-    <p class="empty">Ask a question about the reporting instructions: codes such as <code>S.23.01</code> or
-      <code>R0540</code> help, and so does the wording used in the regulation.</p>
+    <p class="empty">Ask a question about the reporting instructions, in English or Italian: codes such as
+      <code>S.23.01</code> or <code>R0540</code> help, and so does the wording used in the regulation.</p>
   </section>
 </main>
 
@@ -171,34 +181,47 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const FEEDBACK_KEY = "qrt-rag-feedback";
+const GUIDE_KEY = "qrt-rag-guide-seen";
 const KIND = { istruzione: "instruction", tabella: "template table", testo: "text" };
 const CODE_RE = /\b(?:SR|SE|S|E)\.\d{2}\.\d{2}(?:\.\d{2})?\b|\b[RCZ]\d{4}\b/g;
+const LANGS = { en: { suffix: "", name: "English" }, it: { suffix: "_it", name: "Italian" } };
 
-let retriever, cfg, embed = null, last = null;
+const retrievers = { en: null, it: null };   // indici caricati
+const loading = {};                          // caricamenti in corso
+let itAvailable = false;
+let enToIt = null;                           // id chunk inglese -> chunk italiano abbinato
+let embed = null, modelState = "loading", modelMsg = "Keyword search ready · loading the semantic model…";
+let last = null, fbRemote = null, remoteOn = false;
+
+function setStatus(text, kind = "") {
+  $("model-status").textContent = text;
+  $("model-status").dataset.kind = kind;
+}
+const refreshStatus = () => setStatus(modelMsg, { loading: "loading", ready: "ok", failed: "error" }[modelState]);
 
 // ------------------------------------------------------------ guida introduttiva
-const GUIDE_KEY = "qrt-rag-guide-seen";
 const GUIDE = [
   {
     title: "Ask a precise question",
     body: `<ul>
+      <li>Ask in <strong>English or Italian</strong>: the language is detected automatically, or choose it under the question.
+        English excerpts are the official text used for this tool.</li>
       <li>Use template and cell codes when you know them: <em>What must be reported in <code>S.23.01</code> <code>R0540</code>?</em></li>
       <li>Use the wording of the regulation: <em>eligible own funds to meet the SCR</em> works better than <em>own funds covering the SCR</em>.</li>
       <li>Say whether you mean <strong>individual undertakings</strong> or <strong>groups</strong>, or use the Annex filter
         (II = individual undertakings, III = groups). For questions on the articles keep <em>All</em>.</li>
-      <li>One topic per question. The search returns the relevant excerpts of the regulation; it does not write an answer.</li>
+      <li>One topic per question. The search returns the relevant excerpts; it does not write an answer.</li>
     </ul>`,
   },
   {
     title: "Get an answer from Copilot",
     body: `<ul>
       <li>After a search, click <strong>Copy prompt for an AI assistant</strong>: it copies the instructions,
-        the numbered excerpts and your question.</li>
-      <li>Open a <strong>new chat</strong> in Copilot (or any other assistant), paste and send.
-        Add <em>Answer in Italian</em> at the end if you prefer.</li>
+        the numbered excerpts and your question, in the language of the question.</li>
+      <li>Open a <strong>new chat</strong> in Copilot (or any other assistant), paste and send.</li>
       <li>Check every citation [n] against excerpt [n] here, especially codes and closed lists.
-        <strong>PDF EN</strong> opens the official text at the exact page; <strong>PDF IT</strong> opens the Italian
-        version (≈ means an estimated page).</li>
+        Each excerpt links to both PDFs: the page in the language of the excerpt is exact,
+        ≈ marks an estimated page in the other version.</li>
     </ul>`,
   },
   {
@@ -213,7 +236,6 @@ const GUIDE = [
   },
 ];
 let guideIdx = 0;
-
 function showGuideStep(i) {
   guideIdx = i;
   $("guide-step").textContent = `Step ${i + 1} of ${GUIDE.length}`;
@@ -223,13 +245,8 @@ function showGuideStep(i) {
   $("guide-back").disabled = i === 0;
   $("guide-next").textContent = i === GUIDE.length - 1 ? "Start searching" : "Next";
 }
-function openGuide() {
-  showGuideStep(0);
-  $("guide").showModal();
-}
-function closeGuide() {
-  $("guide").close();
-}
+const openGuide = () => { showGuideStep(0); $("guide").showModal(); };
+const closeGuide = () => $("guide").close();
 $("guide").addEventListener("close", () => {
   try { localStorage.setItem(GUIDE_KEY, "1"); } catch { /* storage non disponibile */ }
   $("q").focus();
@@ -238,57 +255,85 @@ $("guide-next").onclick = () => (guideIdx < GUIDE.length - 1 ? showGuideStep(gui
 $("guide-back").onclick = () => guideIdx > 0 && showGuideStep(guideIdx - 1);
 $("guide-skip").onclick = closeGuide;
 $("open-guide").onclick = openGuide;
-
 let guideSeen = false;
 try { guideSeen = localStorage.getItem(GUIDE_KEY) === "1"; } catch { /* storage non disponibile */ }
 if (!guideSeen) openGuide();   // solo alla prima visita
 
-function setStatus(text, kind = "") {
-  $("model-status").textContent = text;
-  $("model-status").dataset.kind = kind;
+// ------------------------------------------------------------ indici e lingua
+function getRetriever(lang) {
+  if (retrievers[lang]) return Promise.resolve(retrievers[lang]);
+  if (!loading[lang]) {
+    loading[lang] = WebRetriever.load("assets/", LANGS[lang].suffix)
+      .then((r) => (retrievers[lang] = r))
+      .catch((e) => { delete loading[lang]; throw e; });
+  }
+  return loading[lang];
+}
+
+// Lingua della domanda: conta le parole tipiche di ciascuna lingua (a parita', inglese)
+const MARKERS = {
+  it: new Set(("il lo la gli le di del della dello dei degli delle al alla ai che per con nel nella nei sono " +
+    "come quali quale cosa dove quando va vanno deve devono si una uno un è non tra fondi propri imprese " +
+    "impresa gruppi gruppo modello cella riga colonna istruzioni segnalazione riserve tecniche requisito").split(" ")),
+  en: new Set(("the of and to in for on is are be what which how where when must should shall a an " +
+    "own funds undertakings undertaking groups group template cell row column instructions reporting " +
+    "technical provisions requirement").split(" ")),
+};
+function detectLang(q) {
+  const words = q.toLowerCase().match(/\p{L}+/gu) || [];
+  let it = 0, en = 0;
+  for (const w of words) { if (MARKERS.it.has(w)) it++; if (MARKERS.en.has(w)) en++; }
+  return it > en ? "it" : "en";
 }
 
 // ------------------------------------------------------------ avvio
 try {
-  retriever = await WebRetriever.load("assets/");
+  await getRetriever("en");
 } catch (e) {
   setStatus("Could not load the index: " + e.message, "error");
   throw e;
 }
-cfg = retriever.config;
+for (const a of retrievers.en.annexes) {
+  $("annex").insertAdjacentHTML("beforeend", `<option value="${esc(a)}">Annex ${esc(a)}</option>`);
+}
+itAvailable = await fetch("assets/config_it.json", { method: "HEAD" }).then((r) => r.ok).catch(() => false);
+if (!itAvailable) $("lang").querySelector('option[value="it"]').remove();
+
 // Feedback remoto (Supabase), facoltativo: senza configurazione resta solo nel browser
-const fbRemote = await fetch("feedback-config.json")
-  .then((r) => (r.ok ? r.json() : null)).catch(() => null);
-const remoteOn = !!(fbRemote && fbRemote.url && fbRemote.key);
+fbRemote = await fetch("feedback-config.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+remoteOn = !!(fbRemote && fbRemote.url && fbRemote.key);
 if (remoteOn) {
   $("fb-notice").textContent = "Your question, rating and note are stored anonymously to improve " +
     "the search, with no personal data. Do not include confidential information.";
 }
-for (const a of retriever.annexes) {
-  $("annex").insertAdjacentHTML("beforeend", `<option value="${esc(a)}">Annex ${esc(a)}</option>`);
-}
 $("go").disabled = false;
-setStatus("Keyword search ready · loading the semantic model…", "loading");
+refreshStatus();
 updateFeedbackCount();
 loadModel();
 
 async function loadModel() {
   const files = new Map();
   try {
-    embed = await loadEmbedder(cfg.model, {
+    // Un solo modello multilingue per inglese e italiano
+    embed = await loadEmbedder(retrievers.en.config.model, {
       onProgress: (p) => {
         if (p.status !== "progress" || !p.total) return;
         files.set(p.file, [p.loaded, p.total]);
         let loaded = 0, total = 0;
         for (const [l, t] of files.values()) { loaded += l; total += t; }
-        setStatus(`Downloading the semantic model (first visit only): ${Math.round((100 * loaded) / total)}% of ${(total / 1e6).toFixed(0)} MB`, "loading");
+        modelMsg = `Downloading the semantic model (first visit only): ${Math.round((100 * loaded) / total)}% of ${(total / 1e6).toFixed(0)} MB`;
+        refreshStatus();
       },
     });
-    setStatus("Hybrid search ready: keywords + semantic model", "ok");
-    if (last && last.mode === "keyword") runSearch(last);   // aggiorna l'ultima ricerca
+    modelState = "ready";
+    modelMsg = "Hybrid search ready: keywords + semantic model";
+    refreshStatus();
+    if (last && last.mode === "keyword") runSearch({ q: last.q, annex: last.annex, k: last.k, lang: last.lang });
   } catch (e) {
     console.error(e);
-    setStatus("Semantic model unavailable in this browser: keyword search only", "error");
+    modelState = "failed";
+    modelMsg = "Semantic model unavailable in this browser: keyword search only";
+    refreshStatus();
   }
 }
 
@@ -297,22 +342,34 @@ $("k").oninput = () => { $("k-val").textContent = $("k").value; };
 $("form").onsubmit = (ev) => {
   ev.preventDefault();
   const q = $("q").value.trim();
-  if (q) runSearch({ q, annex: $("annex").value || null, k: +$("k").value });
+  if (!q) return;
+  const pref = $("lang").value;
+  runSearch({ q, annex: $("annex").value || null, k: +$("k").value, lang: pref === "auto" ? detectLang(q) : pref });
 };
 $("q").onkeydown = (ev) => {
   if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); $("form").requestSubmit(); }
 };
 
-async function runSearch({ q, annex, k }) {
+async function runSearch({ q, annex, k, lang }) {
+  if (lang === "it" && !itAvailable) lang = "en";
+  let r;
+  try {
+    if (lang === "it" && !retrievers.it) setStatus("Loading the Italian index (first Italian question only)…", "loading");
+    r = await getRetriever(lang);
+  } catch (e) {
+    console.error(e);
+    lang = "en";
+    r = retrievers.en;
+  }
+  refreshStatus();
   const t0 = performance.now();
-  let vectors = null;
-  let mode = "keyword";
+  let vectors = null, mode = "keyword";
   if (embed) {
-    vectors = await embed(retriever.queryTexts(q));
+    vectors = await embed(r.queryTexts(q));
     mode = "hybrid";
   }
-  const hits = retriever.search(q, { k, annex, queryVectors: vectors });
-  last = { q, annex, k, mode, hits, ms: performance.now() - t0 };
+  const hits = r.search(q, { k, annex, queryVectors: vectors });
+  last = { q, annex, k, lang, mode, hits, r, ms: performance.now() - t0 };
   renderResults();
   $("tools").hidden = false;
   $("rate").hidden = false;
@@ -320,11 +377,9 @@ async function runSearch({ q, annex, k }) {
   $("copy-msg").textContent = "";
 }
 
-function highlight(text) {
-  return esc(text).replace(CODE_RE, (m) => `<code>${m}</code>`);
-}
+const highlight = (text) => esc(text).replace(CODE_RE, (m) => `<code>${m}</code>`);
 
-function pdfLink(lang, page, approx) {
+function pdfLink(cfg, lang, page, approx) {
   const file = cfg.pdfs?.[lang];
   if (!file || !page) return "";
   const title = approx ? "Estimated page (no exact match in this language version)" : "";
@@ -333,45 +388,88 @@ function pdfLink(lang, page, approx) {
 }
 
 function renderResults() {
-  const { hits, mode, ms, annex } = last;
+  const { hits, mode, ms, annex, lang, r } = last;
+  const cfg = r.config;
   if (!hits.length) {
     $("results").innerHTML = `<p class="empty">No excerpts found${annex ? ` in Annex ${esc(annex)}` : ""}.</p>`;
     return;
   }
   const how = mode === "hybrid" ? "hybrid search" : "keyword search (semantic model still loading)";
+  const other = lang === "it" ? "en" : "it";
   const html = hits.map((h, n) => {
     const [prefix, ...rest] = h.text.split("\n");
     const body = rest.join("\n");
     const long = body.length > 700;
-    const ref = cfg.ref_lang && h.page_ref
-      ? pdfLink(cfg.ref_lang, h.page_ref, h.page_ref_method !== "exact") : "";
-    return `<article class="hit">
+    const ref = cfg.ref_lang && h.page_ref ? pdfLink(cfg, cfg.ref_lang, h.page_ref, h.page_ref_method !== "exact") : "";
+    const canOther = lang === "it" ? h.ref_id != null : itAvailable;
+    return `<article class="hit" data-n="${n}">
       <div class="hit-head">
         <span class="num">[${n + 1}]</span>
         ${h.template_full ? `<code>${esc(h.template_full)}</code>` : ""}
         ${h.annex ? `<span class="chip">Annex ${esc(h.annex)}</span>` : h.article ? `<span class="chip">Article ${esc(h.article)}</span>` : ""}
         <span class="chip">${KIND[h.kind] || esc(h.kind)}</span>
-        <span class="links">${pdfLink(cfg.lang, h.page, false)}${ref}</span>
+        <span class="links">${pdfLink(cfg, cfg.lang, h.page, false)}${ref}</span>
       </div>
       <p class="prefix">${esc(prefix)}</p>
       <p class="body${long ? " clamp" : ""}">${highlight(body)}</p>
-      ${long ? `<button type="button" class="link more">Show more</button>` : ""}
+      <div class="hit-actions">
+        ${long ? `<button type="button" class="link more">Show more</button>` : ""}
+        ${canOther ? `<button type="button" class="link other-btn">Show ${LANGS[other].name} text</button>` : ""}
+      </div>
+      <div class="other" hidden></div>
     </article>`;
   }).join("");
   $("results").innerHTML =
-    `<p class="results-head">${hits.length} excerpts · ${how} · ${Math.round(ms)} ms</p>` + html;
+    `<p class="results-head">${hits.length} excerpts · ${LANGS[lang].name} text · ${how} · ${Math.round(ms)} ms</p>` + html;
 }
 
-$("results").onclick = (ev) => {
-  const btn = ev.target.closest(".more");
+// Testo dell'altra lingua per lo stesso estratto (solo con abbinamento esatto)
+async function otherText(h) {
+  if (last.lang === "it") return retrievers.en.chunks[h.ref_id];
+  const rit = await getRetriever("it");
+  if (!enToIt) {
+    enToIt = new Map();
+    for (const c of rit.chunks) if (c.ref_id != null) enToIt.set(c.ref_id, c);
+  }
+  return enToIt.get(h.id) || null;
+}
+
+$("results").onclick = async (ev) => {
+  const more = ev.target.closest(".more");
+  if (more) {
+    const body = more.closest(".hit").querySelector(".body");
+    const clamped = body.classList.toggle("clamp");
+    more.textContent = clamped ? "Show more" : "Show less";
+    return;
+  }
+  const btn = ev.target.closest(".other-btn");
   if (!btn) return;
-  const body = btn.previousElementSibling;
-  const open = body.classList.toggle("clamp");
-  btn.textContent = open ? "Show more" : "Show less";
+  const art = btn.closest(".hit");
+  const box = art.querySelector(".other");
+  if (!box.hidden) { box.hidden = true; btn.textContent = btn.textContent.replace("Hide", "Show"); return; }
+  if (!box.dataset.loaded) {
+    btn.disabled = true;
+    try {
+      const c = await otherText(last.hits[+art.dataset.n]);
+      if (c) {
+        const [prefix, ...rest] = c.text.split("\n");
+        box.innerHTML = `<p class="prefix">${esc(prefix)}</p><p class="body">${highlight(rest.join("\n"))}</p>`;
+      } else {
+        box.innerHTML = `<p class="muted">No exactly matching excerpt in the other language version: use the PDF link (≈ estimated page).</p>`;
+      }
+      box.dataset.loaded = "1";
+    } catch (e) {
+      console.error(e);
+      box.innerHTML = `<p class="muted">The other language version could not be loaded.</p>`;
+    }
+    btn.disabled = false;
+  }
+  box.hidden = false;
+  btn.textContent = btn.textContent.replace("Show", "Hide");
 };
 
 // ------------------------------------------------------------ prompt per un assistente
-function buildPrompt(q, hits, maxChunk = 2000, maxTotal = 16000) {
+function buildPrompt(cfg, q, hits, maxChunk = 2000, maxTotal = 16000) {
   const L = cfg.labels;
   const parts = [];
   let total = 0;
@@ -388,7 +486,7 @@ function buildPrompt(q, hits, maxChunk = 2000, maxTotal = 16000) {
 
 $("copy").onclick = async () => {
   if (!last) return;
-  const text = buildPrompt(last.q, last.hits);
+  const text = buildPrompt(last.r.config, last.q, last.hits);
   try {
     await navigator.clipboard.writeText(text);
     $("copy-msg").textContent = "Copied: paste it into your assistant and check its answer against the excerpts.";
@@ -417,7 +515,7 @@ async function sendRemote(rec) {
   const row = {
     question: rec.question, annex: rec.annex, k: rec.k, mode: rec.mode, lang: rec.lang,
     rating: rec.rating, expected: rec.expected, note: rec.note, hits: rec.hits,
-    index_version: cfg.created, client_time: rec.time,
+    index_version: rec.index_version, client_time: rec.time,
   };
   const res = await fetch(`${fbRemote.url.replace(/\/$/, "")}/rest/v1/${fbRemote.table || "feedback"}`,
     { method: "POST", headers, body: JSON.stringify(row) });
@@ -427,6 +525,7 @@ async function sendRemote(rec) {
 async function saveFeedback(rating) {
   if (!last) return;
   // Stesso formato del feedback Gradio: lo legge qrt_rag.evaluation.load_feedback_cases()
+  const cfg = last.r.config;
   const rec = {
     question: last.q, annex: last.annex, k: last.k, mode: last.mode, answer: null, lang: cfg.lang,
     hits: last.hits.map((h) => ({ id: h.id, page: h.page, template: h.template_full, cells: h.cells })),
@@ -434,6 +533,7 @@ async function saveFeedback(rating) {
     expected: $("expected").value.trim().toUpperCase() || null,
     note: $("note").value.trim() || null,
     time: new Date().toISOString().slice(0, 19),
+    index_version: cfg.created,
   };
   const list = loadFeedback();
   list.push(rec);

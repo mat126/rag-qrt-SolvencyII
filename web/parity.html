@@ -69,9 +69,12 @@ const firstDiff = (a, b) => {
   return 0;
 };
 
+// parity.html?lang=it verifica i file italiani (suffisso _it)
+const SUFFIX = new URLSearchParams(location.search).get("lang") === "it" ? "_it" : "";
 let t0 = performance.now();
-const retriever = await WebRetriever.load("assets/");
-const parity = await fetch("assets/parity.json").then((r) => r.json());
+const retriever = await WebRetriever.load("assets/", SUFFIX);
+const parity = await fetch(`assets/parity${SUFFIX}.json`).then((r) => r.json());
+document.title += SUFFIX ? " (IT)" : " (EN)";
 const cfg = retriever.config;
 $("status").textContent = `Indice caricato: ${retriever.chunks.length} chunk, modello ${cfg.model.web}, ` +
   `in ${((performance.now() - t0) / 1000).toFixed(1)} s.`;
