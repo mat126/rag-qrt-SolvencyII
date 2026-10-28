@@ -82,6 +82,11 @@
   .dots { flex: 1; display: flex; gap: .35rem; }
   .dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--line); }
   .dot.on { background: var(--accent); }
+  .guide-top { display: flex; align-items: baseline; gap: 1rem; }
+  .guide-top .guide-step { flex: 1; }
+  .guide-langs { font-size: .85rem; color: var(--muted); }
+  .guide-langs button[aria-pressed="true"] { font-weight: 700; text-decoration: none; color: var(--fg); }
+  .guide-inner .warn { background: var(--chip); border-radius: .5rem; padding: .5rem .7rem; margin: .2rem 0 .6rem; }
   .other { border-left: 3px solid var(--accent); padding: .2rem 0 .2rem .7rem; margin-top: .5rem; }
   .other .prefix { margin-top: 0; }
   .hit-actions { display: flex; gap: 1rem; margin-top: .3rem; }
@@ -98,7 +103,13 @@
 
 <dialog id="guide" aria-labelledby="guide-title">
   <div class="guide-inner">
-    <p class="guide-step" id="guide-step"></p>
+    <div class="guide-top">
+      <p class="guide-step" id="guide-step"></p>
+      <div class="guide-langs" role="group" aria-label="Guide language">
+        <button type="button" class="link" data-glang="en">English</button> ·
+        <button type="button" class="link" data-glang="it">Italiano</button>
+      </div>
+    </div>
     <h2 id="guide-title"></h2>
     <div id="guide-body"></div>
   </div>
@@ -200,58 +211,139 @@ function setStatus(text, kind = "") {
 const refreshStatus = () => setStatus(modelMsg, { loading: "loading", ready: "ok", failed: "error" }[modelState]);
 
 // ------------------------------------------------------------ guida introduttiva
-const GUIDE = [
-  {
-    title: "Ask a precise question",
-    body: `<ul>
-      <li>Ask in <strong>English or Italian</strong>: the language is detected automatically, or choose it under the question.
-        English excerpts are the official text used for this tool.</li>
-      <li>Use template and cell codes when you know them: <em>What must be reported in <code>S.23.01</code> <code>R0540</code>?</em></li>
-      <li>Use the wording of the regulation: <em>eligible own funds to meet the SCR</em> works better than <em>own funds covering the SCR</em>.</li>
-      <li>Say whether you mean <strong>individual undertakings</strong> or <strong>groups</strong>, or use the Annex filter
-        (II = individual undertakings, III = groups). For questions on the articles keep <em>All</em>.</li>
-      <li>One topic per question. The search returns the relevant excerpts; it does not write an answer.</li>
-    </ul>`,
+const GUIDE = {
+  en: {
+    step: (i, n) => `Step ${i} of ${n}`,
+    back: "Back", next: "Next", skip: "Skip", done: "Start searching",
+    slides: [
+      {
+        title: "Ask a precise question",
+        body: `<ul>
+          <li>Ask in <strong>English or Italian</strong>: the language is detected automatically, or choose it under the question.</li>
+          </ul>
+          <p class="warn"><strong>Italian questions:</strong> they work, but the search is a little less precise than in English:
+          the right excerpt may appear lower in the list (it is always within the first 10 in our tests).
+          For important checks, try the question in English as well: the English version is the reference text of this tool.</p>
+          <ul>
+          <li>Use template and cell codes when you know them: <em>What must be reported in <code>S.23.01</code> <code>R0540</code>?</em></li>
+          <li>Use the wording of the regulation: <em>eligible own funds to meet the SCR</em> works better than <em>own funds covering the SCR</em>.</li>
+          <li>Say whether you mean <strong>individual undertakings</strong> or <strong>groups</strong>, or use the Annex filter
+            (II = individual undertakings, III = groups). For questions on the articles keep <em>All</em>.</li>
+          <li>One topic per question. The search returns the relevant excerpts; it does not write an answer.</li>
+        </ul>`,
+      },
+      {
+        title: "Get an answer from Copilot",
+        body: `<ul>
+          <li>After a search, click <strong>Copy prompt for an AI assistant</strong>: it copies the instructions,
+            the numbered excerpts and your question, in the language of the question
+            (ask in Italian and the assistant will answer in Italian).</li>
+          <li>Open a <strong>new chat</strong> in Copilot (or any other assistant), paste and send.</li>
+          <li>Check every citation [n] against excerpt [n] here, especially codes and closed lists.
+            Each excerpt links to both PDFs: the page in the language of the excerpt is exact, ≈ marks an estimated page.
+            <strong>Show English/Italian text</strong> displays the same instruction in the other language.</li>
+        </ul>`,
+      },
+      {
+        title: "Rate the results",
+        body: `<ul>
+          <li>After a search, open <strong>Rate these results</strong>.</li>
+          <li>If you know where the answer is, write the <strong>expected source</strong>, e.g. <code>S.23.01 R0540</code>
+            or <em>Article 2</em>, and a short note: <em>correct</em>, <em>partial</em> or <em>wrong</em>.</li>
+          <li>Click 👍 or 👎. Ratings are used to measure and improve the search, in both languages.
+            They are stored anonymously: never include confidential information.</li>
+        </ul>`,
+      },
+    ],
   },
-  {
-    title: "Get an answer from Copilot",
-    body: `<ul>
-      <li>After a search, click <strong>Copy prompt for an AI assistant</strong>: it copies the instructions,
-        the numbered excerpts and your question, in the language of the question.</li>
-      <li>Open a <strong>new chat</strong> in Copilot (or any other assistant), paste and send.</li>
-      <li>Check every citation [n] against excerpt [n] here, especially codes and closed lists.
-        Each excerpt links to both PDFs: the page in the language of the excerpt is exact,
-        ≈ marks an estimated page in the other version.</li>
-    </ul>`,
+  it: {
+    step: (i, n) => `Passo ${i} di ${n}`,
+    back: "Indietro", next: "Avanti", skip: "Salta", done: "Inizia a cercare",
+    slides: [
+      {
+        title: "Fai una domanda precisa",
+        body: `<ul>
+          <li>Puoi scrivere in <strong>italiano o in inglese</strong>: la lingua viene riconosciuta in automatico,
+            oppure puoi sceglierla sotto la domanda.</li>
+          </ul>
+          <p class="warn"><strong>Attenzione con l'italiano:</strong> la ricerca funziona, ma è un po' meno precisa che in inglese:
+          l'estratto giusto può comparire più in basso nella lista (nei nostri test è sempre tra i primi 10).
+          Per le verifiche importanti prova anche la domanda in inglese: la versione inglese è il testo di riferimento dello strumento.</p>
+          <ul>
+          <li>Usa i codici di template e cella quando li conosci: <em>Cosa va riportato in <code>S.23.01</code> <code>R0540</code>?</em></li>
+          <li>Usa il lessico del regolamento: <em>fondi propri ammissibili per soddisfare l'SCR</em> funziona meglio di
+            <em>fondi propri a copertura dell'SCR</em>.</li>
+          <li>Indica se parli di <strong>singole imprese</strong> o di <strong>gruppi</strong>, oppure usa il filtro Annex
+            (II = singole imprese, III = gruppi). Per le domande sugli articoli lascia <em>All</em>.</li>
+          <li>Un argomento per domanda. L'app trova gli estratti pertinenti del regolamento: non scrive la risposta.</li>
+        </ul>`,
+      },
+      {
+        title: "Fai rispondere Copilot",
+        body: `<ul>
+          <li>Dopo la ricerca, premi <strong>Copy prompt for an AI assistant</strong>: copia le istruzioni,
+            gli estratti numerati e la tua domanda, nella lingua della domanda
+            (se chiedi in italiano, l'assistente risponde in italiano).</li>
+          <li>Apri una <strong>nuova chat</strong> in Copilot (o in un altro assistente), incolla e invia.</li>
+          <li>Controlla ogni citazione [n] sull'estratto [n] qui accanto, soprattutto codici ed elenchi chiusi.
+            Ogni estratto ha il link a entrambi i PDF: la pagina nella lingua dell'estratto è esatta, ≈ indica una pagina stimata.
+            <strong>Show English text</strong> mostra la stessa istruzione nella versione inglese.</li>
+        </ul>`,
+      },
+      {
+        title: "Valuta i risultati",
+        body: `<ul>
+          <li>Dopo la ricerca, apri <strong>Rate these results</strong>.</li>
+          <li>Se sai dove si trova la risposta, scrivi la <strong>fonte attesa</strong> (es. <code>S.23.01 R0540</code>
+            oppure <em>Article 2</em>) e una breve nota: <em>corretta</em>, <em>parziale</em> o <em>errata</em>.</li>
+          <li>Premi 👍 o 👎. Le valutazioni servono a misurare e migliorare la ricerca, in entrambe le lingue.
+            Sono salvate in forma anonima: non inserire mai informazioni riservate.</li>
+        </ul>`,
+      },
+    ],
   },
-  {
-    title: "Rate the results",
-    body: `<ul>
-      <li>After a search, open <strong>Rate these results</strong>.</li>
-      <li>If you know where the answer is, write the <strong>expected source</strong>, e.g. <code>S.23.01 R0540</code>
-        or <em>Article 2</em>, and a short note: <em>correct</em>, <em>partial</em> or <em>wrong</em>.</li>
-      <li>Click 👍 or 👎. Ratings are used to measure and improve the search. They are stored anonymously:
-        never include confidential information.</li>
-    </ul>`,
-  },
-];
+};
+const GUIDE_LANG_KEY = "qrt-rag-guide-lang";
+let guideLang = (() => {
+  try {
+    const saved = localStorage.getItem(GUIDE_LANG_KEY);
+    if (saved === "en" || saved === "it") return saved;
+  } catch { /* storage non disponibile */ }
+  return (navigator.language || "").toLowerCase().startsWith("it") ? "it" : "en";
+})();
 let guideIdx = 0;
+
 function showGuideStep(i) {
+  const G = GUIDE[guideLang];
+  const n = G.slides.length;
   guideIdx = i;
-  $("guide-step").textContent = `Step ${i + 1} of ${GUIDE.length}`;
-  $("guide-title").textContent = GUIDE[i].title;
-  $("guide-body").innerHTML = GUIDE[i].body;
-  $("guide-dots").innerHTML = GUIDE.map((_, j) => `<span class="dot${j === i ? " on" : ""}"></span>`).join("");
+  $("guide-step").textContent = G.step(i + 1, n);
+  $("guide-title").textContent = G.slides[i].title;
+  $("guide-body").innerHTML = G.slides[i].body;
+  $("guide-dots").innerHTML = G.slides.map((_, j) => `<span class="dot${j === i ? " on" : ""}"></span>`).join("");
+  $("guide-back").textContent = G.back;
+  $("guide-skip").textContent = G.skip;
   $("guide-back").disabled = i === 0;
-  $("guide-next").textContent = i === GUIDE.length - 1 ? "Start searching" : "Next";
+  $("guide-next").textContent = i === n - 1 ? G.done : G.next;
+  for (const b of document.querySelectorAll("[data-glang]")) {
+    b.setAttribute("aria-pressed", String(b.dataset.glang === guideLang));
+  }
 }
 const openGuide = () => { showGuideStep(0); $("guide").showModal(); };
 const closeGuide = () => $("guide").close();
+for (const b of document.querySelectorAll("[data-glang]")) {
+  b.onclick = () => {
+    guideLang = b.dataset.glang;
+    try { localStorage.setItem(GUIDE_LANG_KEY, guideLang); } catch { /* storage non disponibile */ }
+    showGuideStep(guideIdx);
+  };
+}
 $("guide").addEventListener("close", () => {
   try { localStorage.setItem(GUIDE_KEY, "1"); } catch { /* storage non disponibile */ }
   $("q").focus();
 });
-$("guide-next").onclick = () => (guideIdx < GUIDE.length - 1 ? showGuideStep(guideIdx + 1) : closeGuide());
+$("guide-next").onclick = () =>
+  (guideIdx < GUIDE[guideLang].slides.length - 1 ? showGuideStep(guideIdx + 1) : closeGuide());
 $("guide-back").onclick = () => guideIdx > 0 && showGuideStep(guideIdx - 1);
 $("guide-skip").onclick = closeGuide;
 $("open-guide").onclick = openGuide;
