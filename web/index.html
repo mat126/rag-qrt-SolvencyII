@@ -113,6 +113,7 @@
         <button type="button" id="down">👎 Wrong</button>
       </div>
       <p id="fb-msg" class="msg"></p>
+      <p id="fb-notice" class="muted" style="margin:.3rem 0 0">Your rating is saved in this browser.</p>
     </details>
 
     <p class="muted">
@@ -156,6 +157,14 @@ try {
   throw e;
 }
 cfg = retriever.config;
+// Feedback remoto (Supabase), facoltativo: senza configurazione resta solo nel browser
+const fbRemote = await fetch("feedback-config.json")
+  .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const remoteOn = !!(fbRemote && fbRemote.url && fbRemote.key);
+if (remoteOn) {
+  $("fb-notice").textContent = "Your question, rating and note are stored anonymously to improve " +
+    "the search, with no personal data. Do not include confidential information.";
+}
 for (const a of retriever.annexes) {
   $("annex").insertAdjacentHTML("beforeend", `<option value="${esc(a)}">Annex ${esc(a)}</option>`);
 }
@@ -303,7 +312,20 @@ function storeFeedback(list) {
 }
 function updateFeedbackCount() { $("fb-count").textContent = loadFeedback().length; }
 
-function saveFeedback(rating) {
+async function sendRemote(rec) {
+  const headers = { "Content-Type": "application/json", apikey: fbRemote.key, Prefer: "return=minimal" };
+  if (fbRemote.key.startsWith("eyJ")) headers.Authorization = `Bearer ${fbRemote.key}`;   // chiavi legacy
+  const row = {
+    question: rec.question, annex: rec.annex, k: rec.k, mode: rec.mode, lang: rec.lang,
+    rating: rec.rating, expected: rec.expected, note: rec.note, hits: rec.hits,
+    index_version: cfg.created, client_time: rec.time,
+  };
+  const res = await fetch(`${fbRemote.url.replace(/\/$/, "")}/rest/v1/${fbRemote.table || "feedback"}`,
+    { method: "POST", headers, body: JSON.stringify(row) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+async function saveFeedback(rating) {
   if (!last) return;
   // Stesso formato del feedback Gradio: lo legge qrt_rag.evaluation.load_feedback_cases()
   const rec = {
@@ -316,13 +338,21 @@ function saveFeedback(rating) {
   };
   const list = loadFeedback();
   list.push(rec);
-  if (!storeFeedback(list)) {
-    $("fb-msg").textContent = "This browser does not allow saving feedback.";
+  const local = storeFeedback(list);       // copia locale, anche come riserva
+  let remote = null;
+  if (remoteOn) {
+    try { await sendRemote(rec); remote = true; } catch (e) { console.error(e); remote = false; }
+  }
+  if (!local && remote !== true) {
+    $("fb-msg").textContent = "Could not save your rating.";
     return;
   }
   $("expected").value = "";
   $("note").value = "";
-  $("fb-msg").textContent = `Saved (${rating === "up" ? "👍" : "👎"}).`;
+  const emoji = rating === "up" ? "👍" : "👎";
+  $("fb-msg").textContent = remote === false
+    ? `Saved in this browser only (${emoji}): the feedback server could not be reached.`
+    : `Saved (${emoji}). Thank you!`;
   updateFeedbackCount();
 }
 $("up").onclick = () => saveFeedback("up");

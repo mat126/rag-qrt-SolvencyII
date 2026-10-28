@@ -26,3 +26,21 @@ cd web
 python -m http.server 8000
 # then open http://localhost:8000/parity.html
 ```
+
+## Collecting feedback (optional, Supabase)
+
+Ratings are always stored in the visitor's browser. To collect them centrally:
+
+1. Create a Supabase project and run `supabase/feedback.sql` in the SQL Editor: it creates the
+   `feedback` table and lets the public key **insert only** (no reads, updates or deletes).
+2. Fill in `feedback-config.json` with the project URL and the **public** key
+   (anon / publishable). Never put the secret (service_role) key in the web app.
+3. Read the collected feedback from Python with the secret key:
+
+```python
+from qrt_rag.feedback import fetch_supabase_feedback
+fetch_supabase_feedback(URL, SECRET_KEY, "feedback_supabase.jsonl")
+```
+
+The resulting file has the same format as the Gradio feedback, so
+`qrt_rag.evaluation.load_feedback_cases()` reads it directly.

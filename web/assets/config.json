@@ -1,0 +1,193 @@
+{
+ "created": "2026-10-27T15:34:44",
+ "lang": "en",
+ "n_chunks": 7985,
+ "dim": 384,
+ "dtype": "float16",
+ "model": {
+  "hf": "intfloat/multilingual-e5-small",
+  "web": "Xenova/multilingual-e5-small",
+  "q_prefix": "query: ",
+  "p_prefix": "passage: ",
+  "pooling": "mean"
+ },
+ "pdfs": {
+  "en": "regulation_en.pdf",
+  "it": "regulation_it.pdf"
+ },
+ "ref_lang": "it",
+ "search": {
+  "n_cand": 40,
+  "rrf_k": 60,
+  "code_boost": 0.05,
+  "bm25": {
+   "k1": 1.5,
+   "b": 0.75,
+   "epsilon": 0.25
+  }
+ },
+ "patterns": {
+  "token": {
+   "source": "(?:sr|se|s|e)\\.\\d{2}\\.\\d{2}(?:\\.\\d{2})?|[rcz]\\d{4}|[\\p{L}\\p{N}_]+",
+   "flags": "gu"
+  },
+  "template": {
+   "source": "\\b(SR|SE|S|E)\\.\\s?(\\d{2})\\.(\\d{2})(?:\\.(\\d{2}))?\\b",
+   "flags": "g"
+  },
+  "cell": {
+   "source": "\\b[RCZ]\\d{4}\\b",
+   "flags": "g"
+  },
+  "group": {
+   "source": "\\bgroups?\\b",
+   "flags": "i"
+  },
+  "solo": {
+   "source": "\\b(?:individual|solo)\\s+undertakings?\\b",
+   "flags": "i"
+  }
+ },
+ "stopwords": [
+  "a",
+  "about",
+  "also",
+  "am",
+  "an",
+  "and",
+  "another",
+  "any",
+  "are",
+  "as",
+  "at",
+  "be",
+  "been",
+  "being",
+  "both",
+  "but",
+  "by",
+  "can",
+  "could",
+  "did",
+  "do",
+  "does",
+  "done",
+  "each",
+  "either",
+  "every",
+  "for",
+  "from",
+  "had",
+  "has",
+  "have",
+  "having",
+  "how",
+  "if",
+  "in",
+  "into",
+  "is",
+  "it",
+  "its",
+  "itself",
+  "may",
+  "might",
+  "must",
+  "nor",
+  "of",
+  "on",
+  "only",
+  "onto",
+  "or",
+  "other",
+  "over",
+  "s",
+  "same",
+  "shall",
+  "should",
+  "so",
+  "such",
+  "than",
+  "that",
+  "the",
+  "then",
+  "these",
+  "this",
+  "those",
+  "to",
+  "under",
+  "very",
+  "was",
+  "were",
+  "what",
+  "when",
+  "where",
+  "which",
+  "who",
+  "whom",
+  "whose",
+  "why",
+  "will",
+  "with",
+  "would"
+ ],
+ "query_meta": [
+  "cell",
+  "fill",
+  "filled",
+  "instruction",
+  "instructions",
+  "report",
+  "reported",
+  "reports"
+ ],
+ "labels": {
+  "annex": "Annex",
+  "article": "Article",
+  "page": "p.",
+  "excerpts": "excerpts",
+  "question": "Question"
+ },
+ "ui": {
+  "title": "RAG on Commission Implementing Regulation (EU) 2023/894",
+  "question": "Question",
+  "placeholder": "E.g. What must be reported in S.23.01 R0540?",
+  "annex": "Annex",
+  "all": "All",
+  "k": "Excerpts (k)",
+  "mode": "Mode",
+  "ask": "Ask",
+  "answer_h": "Answer",
+  "rate_h": "Rate",
+  "expected": "Expected source (optional): e.g. S.23.01 R0540 or Article 2",
+  "note": "Note (optional)",
+  "up": "👍 Correct",
+  "down": "👎 Wrong",
+  "sources_h": "Retrieved excerpts",
+  "search_only": "Search only",
+  "search_only_msg": "_Search-only mode: see the excerpts on the right._",
+  "empty": "Please type a question.",
+  "no_state": "Ask a question first.",
+  "saved": "Saved ({emoji}). Total feedback: {n}",
+  "llm_name": "Qwen (local)",
+  "auth": "RAG QRT - restricted access"
+ },
+ "system_prompt": "You are an expert assistant on Solvency II supervisory reporting.\nAnswer ONLY on the basis of the excerpts from the regulation provided.\n- Cite every statement with the number of the excerpt, e.g. [2].\n- Report template and cell codes (S.xx.xx, R0000, C0000) exactly as in the text.\n- The same template may have different instructions in different annexes (e.g.\n  individual undertakings and groups): always state the annex and, if the question\n  does not specify it, distinguish the cases instead of mixing them.\n- Report closed lists exactly as in the text, with their original numeric codes:\n  do not renumber them and do not add or remove options.\n- If an instruction is identical for individual undertakings and groups, state it\n  only once instead of repeating it.\n- If the excerpts do not contain the answer, say so clearly instead of guessing.\n- Answer in English, concisely.",
+ "python_metrics": {
+  "solo BM25": {
+   "configurazione": "solo BM25",
+   "n": 31,
+   "hit@1": 0.2258,
+   "hit@5": 0.8065,
+   "hit@10": 0.9032,
+   "MRR": 0.5061
+  },
+  "BM25 + embeddings": {
+   "configurazione": "BM25 + embeddings",
+   "n": 31,
+   "hit@1": 0.3548,
+   "hit@5": 0.9677,
+   "hit@10": 1.0,
+   "MRR": 0.6196
+  }
+ }
+}
